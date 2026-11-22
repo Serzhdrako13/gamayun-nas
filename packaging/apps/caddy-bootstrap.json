@@ -1,0 +1,1 @@
+{"admin": {"listen": "unix//run/gamayun-caddy/admin.sock|0660"}, "apps": {"pki": {"certificate_authorities": {"local": {"name": "gamayun-nas Local CA", "install_trust": false}}}}}

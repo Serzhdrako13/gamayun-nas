@@ -1,0 +1,17 @@
+#!/bin/sh
+# gamayun-nas-apps postrm: конфиги, которые писал gamayun-helper (apps.configure), убираются при remove и purge;
+# данные приложений на пуле (<пул>/.apps) не удаляются никогда. Повторная установка — gamayund настроит пул заново.
+set -e
+case "$1" in
+  remove|purge)
+    rm -f /etc/gamayun-nas/apps/daemon.json /etc/gamayun-nas/apps/containerd.toml /etc/gamayun-nas/apps.json
+    for u in gamayun-docker gamayun-containerd; do
+      rm -f /etc/systemd/system/$u.service.d/gamayun-pool.conf; rmdir /etc/systemd/system/$u.service.d 2>/dev/null || true
+    done
+    rm -rf /etc/gamayun-nas/apps-backup
+    rmdir /etc/gamayun-nas/apps /run/gamayun-nas-apps 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+    # CA и сертификаты Caddy — только при purge (иначе клиентам пришлось бы заново ставить корневой).
+    if [ "$1" = purge ]; then rm -rf /var/lib/gamayun-caddy; userdel gamayun-caddy 2>/dev/null || true; fi ;;
+esac
+exit 0

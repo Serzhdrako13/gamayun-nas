@@ -1,0 +1,20 @@
+#!/bin/sh
+# gamayun-nas-apps postinst. Идемпотентно. Docker не запускает — это делает gamayund (флаг /run/gamayun-nas-apps/start).
+# Caddy от пула не зависит: включён всегда; без опубликованных приложений ничего не слушает.
+set -e
+[ "$1" = configure ] || exit 0
+getent group docker >/dev/null || groupadd -r docker
+install -d -m 0755 /etc/gamayun-nas/apps
+# Каркас прежнего запуска Docker вне пула — только пустой.
+for d in /var/lib/docker /var/lib/containerd; do [ -d $d ] && rmdir $d 2>/dev/null || true; done
+# Caddy — своя учётка (основная группа gamayun: доступ к сокетам gamayund и обратно).
+getent passwd gamayun-caddy >/dev/null || useradd -r -g gamayun -d /var/lib/gamayun-caddy -s /usr/sbin/nologin gamayun-caddy
+systemctl daemon-reload
+# Обновление пакета: работающие по команде gamayund службы — перезапуск с новыми бинарниками.
+if [ -n "$2" ] && [ -e /run/gamayun-nas-apps/start ] && systemctl is-active -q gamayun-docker.service; then
+  systemctl restart gamayun-containerd.service gamayun-docker.service || true
+fi
+systemctl enable gamayun-caddy.service >/dev/null 2>&1 || true
+[ -z "$2" ] || systemctl try-restart gamayun-caddy.service || true
+systemctl start gamayun-caddy.service || echo "gamayun-nas-apps: gamayun-caddy не запустился (journalctl -u gamayun-caddy)" >&2
+exit 0

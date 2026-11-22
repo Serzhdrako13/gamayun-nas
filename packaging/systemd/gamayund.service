@@ -1,0 +1,56 @@
+# gamayund — демон управления gamayun-nas: HTTPS API, задачи, события. Без root.
+# Вход администратора обязателен. Первый администратор:
+#   sudo -u gamayun /usr/lib/gamayun-nas/gamayund admin create -config /etc/gamayun-nas/gamayund.json -name <имя>
+# или токен установки из /var/lib/gamayun-nas/setup-token (0600).
+# Самоподписанный сертификат — /var/lib/gamayun-nas/tls/, отпечаток — в журнале.
+[Unit]
+Description=gamayun-nas management daemon
+Documentation=file:///usr/share/doc/gamayun-nas/README.md
+Wants=gamayun-helper.service
+After=network.target gamayun-helper.service
+
+[Service]
+Type=simple
+User=gamayun
+Group=gamayun
+ExecStart=/usr/lib/gamayun-nas/gamayund -config /etc/gamayun-nas/gamayund.json
+# /var/lib/gamayun-nas: база SQLite (WAL), tls/, setup-token. На образе системы — /data/config.
+StateDirectory=gamayun-nas
+StateDirectoryMode=0700
+# Сокет forward_auth для Caddy (группа gamayun).
+RuntimeDirectory=gamayund
+RuntimeDirectoryMode=0750
+ConfigurationDirectory=gamayun-nas
+Restart=on-failure
+RestartSec=2s
+# Корректная остановка: задачи переводятся в interrupted, база закрывается.
+TimeoutStopSec=30s
+UMask=0077
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

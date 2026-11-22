@@ -1,0 +1,19 @@
+#!/bin/sh
+# gamayun-nas postrm. Данные и пулы НЕ удаляются ни при remove, ни при purge:
+# /var/lib/gamayun-nas (база, сертификат, boot-pools.json), /srv/gamayun-nas, пулы на дисках.
+# purge удаляет только конфиги /etc/gamayun-nas и drop-in fail2ban; include в smb.conf остаётся
+# (копия до установки — /etc/samba/smb.conf.pre-gamayun).
+set -e
+case "$1" in
+  remove)
+    # ротация fail2ban: вернуть штатный файл Debian (см. postinst)
+    rm -f /etc/logrotate.d/fail2ban
+    dpkg-divert --package gamayun-nas --remove --rename --divert /etc/fail2ban/logrotate.dpkg-orig /etc/logrotate.d/fail2ban >/dev/null 2>&1 || true
+    systemctl daemon-reload >/dev/null 2>&1 || true ;;
+  purge)
+    rm -f /etc/gamayun-nas/gamayund.json /etc/gamayun-nas/gamayun-helper.json
+    rmdir /etc/gamayun-nas 2>/dev/null || true
+    rm -f /etc/fail2ban/jail.d/gamayun-nas.local
+    systemctl daemon-reload >/dev/null 2>&1 || true ;;
+esac
+exit 0

@@ -1,0 +1,12 @@
+  {
+      "report": [
+          {
+              "lv": [
+                  {"lv_name":"data", "vg_name":"dn_probe", "lv_size":"1056964608", "lv_attr":"-wi-ao----", "lv_path":"/dev/dn_probe/data"}
+              ]
+          }
+      ]
+      ,
+      "log": [
+      ]
+  }

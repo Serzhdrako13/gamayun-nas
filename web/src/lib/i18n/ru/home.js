@@ -1,0 +1,28 @@
+// routes/Home.svelte: главная — состояние, пулы, диски, задачи.
+export default {
+  taskState: { queued: 'в очереди', running: 'выполняется', succeeded: 'готово', failed: 'ошибка', interrupted: 'прервана' },
+  poolPrefix: 'Пул {name}:',
+  details: 'Подробнее',
+  allowWrite: 'Разрешить запись…',
+  noConnection: 'Нет связи с сервером',
+  allGood: 'Всё в порядке',
+  poolsNoIssues: 'Пулов: {n}, замечаний нет',
+  noPoolsYet: 'Пулов пока нет',
+  issues: 'Замечаний: {n}',
+  issuesHint: 'Подробности — в сообщениях выше',
+  pools: 'Пулы',
+  noPools: 'Пулов нет.',
+  disks: 'Диски',
+  allDisks: 'Все диски',
+  freeDisks: 'дисков, свободных для пула: ',
+  smart: {
+    critical: 'неисправность: {n}',
+    warning: 'внимание: {n}',
+    ok: 'в норме: {n}',
+    unknown: 'нет данных: {n}',
+    maxTemp: '· макс. {n} °C',
+  },
+  incomplete: 'Состав дисков определён не полностью — для пулов диски пока не предлагаются.',
+  tasks: 'Задачи',
+  noTasks: 'Активных задач нет.',
+};

@@ -1,0 +1,1110 @@
+openapi: 3.1.0
+info:
+  title: GamayunNas API (gamayund)
+  version: 0.1.0-dev
+  description: |
+    API демона управления gamayun-nas.
+
+    **Аутентификация**: все эндпоинты, кроме `/api/v1/health`,
+    `POST /api/v1/auth/login` и `POST /api/v1/auth/setup`, требуют сессию
+    администратора — cookie `__Host-dn_session` (HttpOnly, Secure,
+    SameSite=Strict), выдаётся при входе. Без сессии — 401 (`unauthorized`,
+    `session_expired`, `setup_required` — администратор ещё не создан).
+
+    **CSRF**: POST требует заголовок `X-CSRF-Token` (значение `csrf_token` из
+    ответа входа или `GET /api/v1/auth/session`); если браузер прислал
+    `Origin` или `Sec-Fetch-Site`, они должны указывать на тот же источник.
+    Иначе — 403 `csrf_failed`. Тела — только `Content-Type: application/json`.
+
+    По умолчанию HTTPS (самоподписанный сертификат, отпечаток — в журнале
+    gamayund) на 127.0.0.1. Сетевой адрес разрешён при включённых TLS и
+    аутентификации; без них — только с `insecure_allow_remote`.
+
+    **Веб-интерфейс**: все пути вне `/api/` отдают встроенный
+    Svelte-интерфейс (статика, без входа; неизвестные пути без расширения —
+    `index.html`). Данные интерфейс берёт только из этого API.
+
+    Ошибки всегда в формате `Error`. Коды (`error.code`) стабильны и
+    предназначены для программ; `message` — для человека, на русском.
+    Тела запросов разбираются строго: неизвестные поля — 400.
+servers:
+  - url: https://127.0.0.1:8780
+security:
+  - sessionCookie: []
+paths:
+  /api/v1/health:
+    get:
+      summary: Состояние демона
+      description: Не требует аутентификации.
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Демон и база работают
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: База недоступна
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+  /api/v1/auth/login:
+    post:
+      summary: Вход администратора
+      description: |
+        Создаёт новую сессию (предъявленная старая удаляется) и выставляет
+        cookie `__Host-dn_session`; при первом входе с браузера — также
+        `__Host-dn_device` (доверенное устройство, 180 дней).
+
+        Ошибка имени и ошибка пароля неразличимы (`invalid_credentials`).
+        Ограничение попыток: по адресу клиента (IPv6 — /64) и по имени
+        учётной записи — после 10 и 5 неудач соответственно блокировка
+        1 с, 2 с, 4 с… не дольше 15 мин (429 `too_many_attempts`,
+        `Retry-After`). Браузер с cookie доверенного устройства этого
+        пользователя ограничивается по своей cookie, а не по имени, поэтому
+        перебор извне не блокирует владельца. Попытка во время блокировки
+        неудачей не считается. Проверяется источник (Origin/Sec-Fetch-Site).
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Вход выполнен
+          headers:
+            Set-Cookie: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: Неверное имя или пароль (`invalid_credentials`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/CSRFFailed" }
+        "429": { $ref: "#/components/responses/TooManyAttempts" }
+  /api/v1/auth/app-login:
+    get: {summary: "Вход в опубликованное приложение, открытый маршрут: ?host=<app>-<хост>.local&rd=<путь>. Есть сессия администратора — 302 на https://<host>/.gamayun/callback?code=… (одноразовый код, 60 с). Нет — 302 на /?app_login=… (страница входа, затем возврат). host не опубликован — 400. Событие auth.app_login при входе", security: [], responses: {"302": {description: "redirect"}, "400": {description: "app_host"}}}
+  /api/v1/auth/logout:
+    post:
+      summary: Выход (удаление текущей сессии)
+      operationId: logout
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "204": { description: Сессия удалена, cookie сброшена }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CSRFFailed" }
+  /api/v1/auth/session:
+    get:
+      summary: Текущий пользователь и CSRF-токен
+      description: Как любой запрос с сессией, продлевает срок простоя.
+      operationId: getSession
+      responses:
+        "200":
+          description: Сессия
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/auth/password:
+    post:
+      summary: Смена своего пароля
+      description: |
+        Проверяет текущий пароль (неудача учитывается как неудачный вход),
+        отзывает все сессии пользователя и выдаёт новую (новые cookie и
+        CSRF-токен в ответе). Новый пароль — не короче 10 символов, не длиннее
+        1024 байт, не равен имени и текущему.
+      operationId: changePassword
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordRequest" }
+      responses:
+        "200":
+          description: Пароль изменён, новая сессия
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400":
+          description: Неверный запрос или слабый пароль (`invalid_request`, `weak_password`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Неверный текущий пароль (`invalid_credentials`) или `csrf_failed`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyAttempts" }
+  /api/v1/auth/lockouts:
+    get: {summary: "Действующие блокировки веб-входа: {lockouts: [{id, scope: ip|account|device, address?, user?, unknown_user?, fails, last_failure, until}], persistent: false}. Текст несуществующего имени не выдаётся", security: [{sessionCookie: []}], responses: {"200": {description: ok}, "401": {$ref: "#/components/responses/Unauthorized"}}}
+    delete: {summary: "Снять все блокировки; событие auth.unlock на каждую. Ответ {unlocked}", security: [{sessionCookie: [], csrfHeader: []}], responses: {"200": {description: ok}, "401": {$ref: "#/components/responses/Unauthorized"}}}
+  /api/v1/auth/lockouts/{id}:
+    delete: {summary: "Снять блокировку (счётчик сбрасывается); событие auth.unlock", security: [{sessionCookie: [], csrfHeader: []}], responses: {"204": {description: снята}, "404": {description: "нет (истекла или снята)"}}}
+  /api/v1/auth/setup:
+    post:
+      summary: Первичная настройка — создание первого администратора по токену установки
+      description: |
+        Работает, только пока нет ни одного администратора. Одноразовый токен
+        установки gamayund создаёт при запуске в файле `setup-token` каталога
+        данных (права 0600; в журнал пишется только путь). Успех создаёт
+        администратора, удаляет токен и открывает сессию (как вход).
+        Альтернатива — `gamayund admin create -name <имя>` на самой машине.
+        Пароля по умолчанию нет.
+      operationId: setup
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupRequest" }
+      responses:
+        "201":
+          description: Администратор создан, сессия открыта
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400":
+          description: Неверное имя или слабый пароль (`invalid_request`, `weak_password`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Неверный токен (`invalid_setup_token`) или `csrf_failed`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Администратор уже создан (`already_configured`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyAttempts" }
+  /api/v1/system:
+    get:
+      summary: Сведения о системе (через gamayun-helper)
+      operationId: getSystem
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Сведения
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/System" }
+        "502": { $ref: "#/components/responses/HelperError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+  /api/v1/system/metrics:
+    get:
+      summary: Текущая нагрузка для виджетов (ЦП, память, сеть)
+      description: |
+        ЦП и скорость сети — средние с прошлого запроса (любого клиента);
+        в первом ответе после запуска gamayund они `null`. Сеть — сумма
+        физических интерфейсов (без lo, veth, мостов).
+      operationId: getSystemMetrics
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Показатели
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cpu_percent: { type: number, nullable: true }
+                  cpu_count: { type: integer }
+                  mem_total_bytes: { type: integer }
+                  mem_used_bytes: { type: integer }
+                  net_rx_bytes_per_sec: { type: number, nullable: true }
+                  net_tx_bytes_per_sec: { type: number, nullable: true }
+                  net_ifaces: { type: array, items: { type: string } }
+                  net_by_iface:
+                    description: Скорость по адаптерам, байт/с; null — первый замер
+                    type: array
+                    items: { type: object, properties: { name: { type: string }, rx_bytes_per_sec: { type: number, nullable: true }, tx_bytes_per_sec: { type: number, nullable: true } } }
+                  load1: { type: number }
+                  uptime_sec: { type: number }
+  /api/v1/events/recent:
+    get:
+      summary: Последние события журнала (новые первыми)
+      operationId: getRecentEvents
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "200":
+          description: События
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: "#/components/schemas/Event" } }
+  /api/v1/disks/{id}/release:
+    post:
+      summary: Освободить диск от остатков несуществующего пула (стирает разметку)
+      description: |
+        Только если все разделы диска помечены пулом, которого нет в базе, и ничем не
+        заняты; диск в destructive_allow_ids. Тело `{"confirm_id": "<id>"}`.
+      operationId: releaseDisk
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Диск входит в пул или отказ helper до записи }
+        "200": { description: Диск очищен }
+  /api/v1/disks:
+    get:
+      summary: Снимок дисков с системными ролями (через gamayun-helper)
+      description: |
+        Только чтение. `complete: false` — часть зависимостей не определена,
+        диски с ролью `unknown` могут использоваться. Имена (`name`) временные,
+        `kernel_name` — только для диагностики. у опрошенного диска —
+        `smart` (итог последнего планового опроса, без нового обращения к диску):
+        `{level: ok|warning|critical|unknown, supported, standby, temperature_c,
+        limits {warning_c, critical_c}, reasons[]}`.
+      operationId: getDisks
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Снимок
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiskSnapshot" }
+        "502": { $ref: "#/components/responses/HelperError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+  /api/v1/storage/plan:
+    post:
+      summary: Расчёт пула профиля Home (без обращения к дискам)
+      description: |
+        Чистый расчёт internal/storage/planner: слои, ёмкость, допустимые
+        отказы, остаток, возможные переходы. Ничего не создаёт. Переходы
+        `verified: false` до проверки на стенде.
+        Content-Type обязателен: application/json.
+      operationId: planStorage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PlanRequest" }
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CSRFFailed" }
+        "200":
+          description: План
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Plan" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "422":
+          description: Планировщик отклонил запрос (`plan_rejected`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/storage/pools/plans:
+    post:
+      summary: План операции пула Home (создание, добавление диска, замена) с токеном подтверждения
+      description: |
+        Диски указываются стабильной идентичностью `id` из `GET /api/v1/disks`
+        (WWN/EUI/WWID/серийный), не именем ядра. gamayund берёт свежий снимок
+        дисков через gamayun-helper, проверяет, что диски `unknown` в полном
+        снимке, и считает раскладку planner (с резервом 2 МиБ на GPT).
+
+        Ответ содержит `plan_id` и одноразовый `confirm_token` со сроком
+        `expires_at` (10 минут). Ничего не меняет.
+
+        - `create`: `pool`, `type`, `disk_ids`, `integrity`.
+        - `add_disk`: `pool`, `disk_id`, `type` — целевой тип (пусто — текущий).
+          Поддерживается рост существующих массивов дисками того же размера
+          (например, SHR 2→3: raid1 → raid5; RAID 1 → RAID 5).
+        - `replace`: `pool`, `disk_id` — пул должен быть `degraded` без идущего
+          восстановления.
+      operationId: planPool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PoolPlanRequest" }
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/CSRFFailed" }
+        "200":
+          description: План с токеном
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PoolPlan" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Состояние не допускает операцию (`conflict`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Операция не поддерживается (`unsupported`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Слишком много неподтверждённых планов (`too_many_plans`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502": { $ref: "#/components/responses/HelperError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+  /api/v1/storage/pools/plans/{id}/confirm:
+    post:
+      summary: Подтвердить план и запустить задачу
+      description: |
+        Токен одноразовый: любая попытка (в том числе с неверным токеном)
+        расходует план. Перед постановкой задачи состояние дисков и пула
+        сверяется с моментом расчёта; расхождение — `plan_stale`.
+        gamayun-helper непосредственно перед записью ещё раз проверяет каждый
+        диск (allowlist `destructive_allow_ids`, роль, размер, разделы,
+        holders, сигнатуры) и отказывает (`refused`) при любом сомнении.
+        Задача: `storage.pool.create`, `storage.pool.add_disk` (ждёт reshape,
+        затем растит LVM и Btrfs) или `storage.pool.replace` (ждёт recovery).
+      operationId: confirmPoolPlan
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm_token]
+              properties:
+                confirm_token: { type: string }
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "202":
+          description: Задача поставлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: Неверный токен подтверждения (`bad_token`, план аннулирован) или `csrf_failed`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: План не найден или уже использован (`plan_not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Состояние изменилось после расчёта (`plan_stale`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "410":
+          description: Срок подтверждения истёк (`plan_expired`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502": { $ref: "#/components/responses/HelperError" }
+        "503": { $ref: "#/components/responses/HelperUnavailable" }
+  /api/v1/storage/pools:
+    get:
+      summary: Пулы с фактическим состоянием
+      operationId: listPools
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Пулы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pools:
+                    type: array
+                    items: { $ref: "#/components/schemas/Pool" }
+  /api/v1/storage/pools/{name}:
+    get:
+      summary: Пул и его состояние
+      description: |
+        Состояние собирает gamayun-helper: `/proc/mdstat`, `mdadm --detail`,
+        `dmsetup status --target integrity`, `vgs`/`lvs`, `btrfs filesystem
+        usage`, `btrfs device stats`. Ошибка helper не скрывает запись пула:
+        тогда `status: null` и `status_error`.
+      operationId: getPool
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Пул
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pool" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/storage/pools/{name}/resume:
+    post: {summary: "Продолжить замену: подхватить прерванную операцию с диском (pending/grow_pending — замена, добавление, рост) без перезапуска gamayund; тело не нужно", responses: {"202": {description: "{task} — задача storage.pool.resume"}, "404": {description: "нет пула"}, "409": {description: "незавершённой операции нет или пул занят задачей"}}}
+  /api/v1/nas/users:
+    get: {summary: "Пользователи NAS", responses: {"200": {description: "users[] {name, enabled, groups, created_at}"}}}
+    post: {summary: "Создать пользователя: {name, password}; учётка ОС без входа + пароль Samba", responses: {"201": {description: "создан"}, "400": {description: "имя/пароль"}, "409": {description: "уже есть"}}}
+  /api/v1/nas/users/{name}:
+    delete: {summary: "Удалить пользователя (файлы на пулах остаются)", responses: {"204": {description: "удалён"}, "404": {description: "нет"}}}
+  /api/v1/nas/users/{name}/password:
+    put: {summary: "Сменить пароль Samba: {password}", responses: {"204": {description: "ok"}}}
+  /api/v1/nas/users/{name}/enabled:
+    put: {summary: "Отключить/включить пользователя: {enabled}", responses: {"204": {description: "ok"}}}
+  /api/v1/nas/users/{name}/ssh:
+    put: {summary: "Вход по SSH: {ssh: bool}; 409 — последний администратор со входом по SSH", responses: {"204": {description: ok}, "404": {description: нет}, "409": {description: "последний администратор с SSH"}}}
+  /api/v1/setup/status:
+    get: {summary: "Мастер первоначальной настройки: {done, product}", responses: {"200": {description: ok}}}
+  /api/v1/setup/complete:
+    post: {summary: "Завершить мастер; повторно — 409", responses: {"200": {description: "{done: true}"}, "409": {description: "уже выполнена"}}}
+  /api/v1/system/identity:
+    get: {summary: "Имя сервера, часовой пояс, NTP, список поясов", responses: {"200": {description: "{hostname, timezone, ntp, ntp_synced, timezones[]}"}}}
+    put: {summary: "Задать имя сервера (hostnamectl, Samba, avahi), часовой пояс и NTP: {hostname, timezone, ntp}", responses: {"200": {description: "{identity, warnings[]}"}, "400": {description: "имя/пояс"}}}
+  /api/v1/nas/homes:
+    get: {summary: "Служба домашних папок: {enabled, pool}", responses: {"200": {description: ok}}}
+    put: {summary: "Включить/выключить службу: {enabled, pool}; homes/<user> на пуле, ресурс [homes]", responses: {"200": {description: ok}, "404": {description: "нет пула"}, "409": {description: "смена пула при включённой службе"}}}
+  /api/v1/system/ssh-guard:
+    get: {summary: "Защита SSH от перебора (fail2ban): {settings, status {installed, active, banned[]}}", responses: {"200": {description: ok}}}
+    put: {summary: "Параметры: {enabled, maxretry, findtime, bantime, ignore[]}; по умолчанию выключена", responses: {"200": {description: ok}, "400": {description: "диапазоны/адреса"}}}
+  /api/v1/system/ssh-guard/unban:
+    post: {summary: "Снять блокировку адреса: {ip}", responses: {"204": {description: ok}}}
+  /api/v1/system/tls:
+    get: {summary: "Сертификат HTTPS: {source: config|custom|self-signed, editable, fingerprint_sha256, subject, issuer, dns_names[], ips[], not_before, not_after, self_signed, warnings[]}", responses: {"200": {description: ok}, "503": {description: "TLS отключён"}}}
+    put: {summary: "Свой сертификат: {cert: PEM (сервер + промежуточные), key: PEM}; проверка пары, срока, serverAuth, не CA, SAN, ключ ≥ RSA-2048/P-256; действует сразу, событие tls.certificate_changed", responses: {"200": {description: "новый сертификат"}, "400": {description: "invalid_certificate"}, "409": {description: "tls_from_config — задан в конфигурации"}}}
+    delete: {summary: "Вернуть самоподписанный (загруженный удаляется)", responses: {"200": {description: ok}, "409": {description: "tls_from_config"}}}
+  /api/v1/system/power:
+    post: {summary: "Выключение или перезагрузка: {action: poweroff|reboot, confirm: = action}; событие system.<action> в журнал", responses: {"202": {description: "задание поставлено в systemd"}, "400": {description: "нет подтверждения или неверное действие"}}}
+  /api/v1/system/retention:
+    get: {summary: "Сроки хранения журнала событий и центра уведомлений, дней: {info_days, warning_days, critical_days}; по умолчанию 90/90/365", responses: {"200": {description: ok}}}
+    put: {summary: "Задать сроки (1–3650 дней); записи старше сразу удаляются (последнее событие диска/пула сохраняется)", responses: {"200": {description: "{retention, removed {events, notifications}}"}, "400": {description: "диапазон"}}}
+  /api/v1/notifications/quiet:
+    get: {summary: "Тишина уведомлений: {quiet: null | {id, started, until, reason, mute_critical, by, suppressed, suppressed_critical, ending}}", responses: {"200": {description: ok}, "503": {description: "уведомления не настроены"}}}
+    put: {summary: "Включить или продлить тишину: {until (RFC 3339) | minutes, reason (обязательна, ≤200), mute_critical}; не дольше 7 суток; журнал и центр — как обычно, SMTP/webhook — только critical (если не mute_critical); событие notify.quiet_started", responses: {"200": {description: "{quiet}"}, "400": {description: "срок/причина"}, "409": {description: "quiet_ending — предыдущая тишина завершается"}}}
+    delete: {summary: "Отменить тишину; событие notify.quiet_ended, сводка «за время тишины не отправлено N» во внешние каналы при N > 0", responses: {"200": {description: "{ended}"}}}
+  /api/v1/maintenance/temperature:
+    put: {summary: "Пороги температуры дисков, °C: {hdd: {warning_c, critical_c}, ssd: {warning_c, critical_c}}; 30 ≤ warning < critical ≤ 100; по умолчанию HDD 55/65, SSD/NVMe 70/80. Текущие — в GET /maintenance (temperature)", responses: {"200": {description: "сохранённые пороги"}, "400": {description: "диапазон"}, "503": {description: "maintenance_unavailable"}}}
+  /api/v1/disks/{id}/smart/history:
+    get: {summary: "История SMART диска за ?days=1–90 (по умолчанию 7): {disk_id, days, points[] {t, temperature_c, reallocated, pending, uncorrectable, power_on_hours}}; точка — плановый опрос (30 мин), старше 7 дней — одна на 6 ч (самая горячая), хранение 90 дней", parameters: [{name: id, in: path, required: true, schema: {type: string}}, {name: days, in: query, schema: {type: integer, minimum: 1, maximum: 90}}], responses: {"200": {description: ok}, "400": {description: "id или days"}, "503": {description: "maintenance_unavailable"}}}
+  /api/v1/files:
+    get: {summary: "Веб-файловый менеджер: доступные текущему пользователю папки — права как в Samba (группы, отключённые, пул read-only → read), домашняя папка (homes) при включённой службе. {roots[] {name, pool, level: read|rw, home?}}", responses: {"200": {description: ok}}}
+  /api/v1/files/{root}/list:
+    get: {summary: "Содержимое каталога ?path= (относительный; .., абсолютные и ссылки в пути отклоняются): {root, path, level, entries[] {name, type: file|dir|link|other, size, mtime}, truncated?}; предел 10000 записей", parameters: [{name: root, in: path, required: true, schema: {type: string}}, {name: path, in: query, schema: {type: string}}], responses: {"200": {description: ok}, "400": {description: "путь (invalid_request) или ссылка в пути (refused)"}, "404": {description: "нет доступа к папке (no_access) или каталога нет"}}}
+  /api/v1/files/{root}/download:
+    get: {summary: "Скачать ?path=: файл — как есть (Range поддерживается), папку — zip без сжатия (ссылки пропускаются; ошибка посреди архива обрывает соединение)", parameters: [{name: root, in: path, required: true, schema: {type: string}}, {name: path, in: query, schema: {type: string}}], responses: {"200": {description: "содержимое"}, "206": {description: "часть файла"}, "400": {description: "ссылка или особый файл"}, "404": {description: "нет доступа или объекта"}}}
+  /api/v1/files/{root}/upload:
+    post: {summary: "Загрузить файл: тело — содержимое, Content-Length обязателен; ?path=каталог&name=имя (правила Windows)&on_conflict=error|rename. Пишется во временный файл, затем переименование без перезаписи; владелец — пользователь, группа gamayun-nas-users, 0660 (в домашней — 0600). Ответ {path, name}", parameters: [{name: root, in: path, required: true, schema: {type: string}}], responses: {"201": {description: загружен}, "400": {description: "имя/путь, неполное тело"}, "404": {description: "нет доступа на запись или каталога нет"}, "409": {description: "имя занято (on_conflict=error)"}, "411": {description: "нет Content-Length"}, "507": {description: "no_space — недостаточно места"}}}
+  /api/v1/files/{root}/mkdir:
+    post: {summary: "Создать папку: {path: каталог, name}", parameters: [{name: root, in: path, required: true, schema: {type: string}}], responses: {"201": {description: "{path}"}, "400": {description: "имя/путь"}, "404": {description: "нет доступа на запись или каталога нет"}, "409": {description: "имя занято"}}}
+  /api/v1/files/{root}/rename:
+    post: {summary: "Переименовать файл, папку или ссылку (саму ссылку) в том же каталоге: {path, name}; без перезаписи", parameters: [{name: root, in: path, required: true, schema: {type: string}}], responses: {"200": {description: "{path}"}, "400": {description: "имя/путь, корень папки"}, "404": {description: "нет доступа на запись или объекта"}, "409": {description: "имя занято"}}}
+  /api/v1/files/transfer:
+    post: {summary: "Задача files.transfer: {op: copy|move|delete, root, paths[] (1–1000), to_root, to_path, on_conflict: error|rename}. copy — чтение источника, запись цели; move — запись в обоих (в одной папке — переименование, между папками — копия и удаление); delete — рекурсивно, ссылки удаляются сами. Ссылки и особые файлы не копируются. Итог задачи {done[], failed[] {path, error}, files, dirs, bytes}; отмена — DELETE /files/tasks/{id}", responses: {"202": {description: "{task, id}"}, "400": {description: "неверный запрос, копирование в себя"}, "404": {description: "нет доступа"}}}
+  /api/v1/files/tasks/{id}:
+    delete: {summary: "Отменить свою задачу files.transfer: скопированное остаётся, недописанный файл удаляется, источник незавершённого объекта при переносе не удаляется", parameters: [{name: id, in: path, required: true, schema: {type: string}}], responses: {"204": {description: отменена}, "404": {description: "не задача файлового менеджера или чужая"}, "409": {description: "not_active — уже завершена"}}}
+  /api/v1/nas/groups:
+    get: {summary: "Группы с составом", responses: {"200": {description: "groups[] {name, members}"}}}
+    post: {summary: "Создать группу: {name}", responses: {"201": {description: "создана"}}}
+  /api/v1/nas/groups/{name}:
+    delete: {summary: "Удалить группу и её права", responses: {"204": {description: "удалена"}}}
+  /api/v1/nas/groups/{name}/members:
+    put: {summary: "Заменить состав: {members: [имена]}", responses: {"204": {description: "ok"}}}
+  /api/v1/nas/shares:
+    get: {summary: "Общие папки с правами", responses: {"200": {description: "shares[] {name, pool, comment, read_only, access[]}"}}}
+    post: {summary: "Создать папку на пуле: {name, pool, comment}", responses: {"201": {description: "создана"}, "404": {description: "нет пула"}}}
+  /api/v1/nas/shares/apply:
+    post: {summary: "Повторно применить конфигурацию Samba (идемпотентно)", responses: {"200": {description: "commands, warnings"}}}
+  /api/v1/nas/shares/{name}:
+    get: {summary: "Папка", responses: {"200": {description: ok}}}
+    delete: {summary: "Убрать папку из Samba (данные на пуле остаются)", responses: {"204": {description: ok}}}
+  /api/v1/nas/shares/{name}/dirs:
+    get: {summary: "Вложенные каталоги общей папки: ?path=a/b (относительный; .., абсолютные и ссылки наружу отклоняются) &depth=1..3. Только каталоги. Ответ: {path, dirs: [{name, path, children: null или массив, partial?}], partial?}; предел 500 на каталог, 2000 всего", responses: {"200": {description: ok}, "400": {description: "недопустимый путь или глубина"}, "404": {description: "папки или каталога нет"}}}
+    post: {summary: "Создать вложенный каталог: {path: родитель (\"\" — корень), name — без < > : \" / \\ | ? *, управляющих, точки/пробела в конце, CON/NUL/COM1…/LPT1…}. Владелец root:gamayun-nas-users, режим 2770. Ответ {path, changed}", responses: {"201": {description: создан}, "400": {description: "недопустимый путь/имя (invalid_request) или ссылка/файл в пути, пул не смонтирован (refused)"}, "404": {description: "папки или родителя нет"}, "409": {description: "имя занято"}}}
+    patch: {summary: "Переименовать каталог в пределах родителя: {path: каталог, name: новое имя}; без перезаписи; имя — по правилам Windows. Ответ {path, changed}", responses: {"200": {description: ok}, "400": {description: "недопустимый путь/имя, корень папки, ссылка (refused)"}, "404": {description: "папки или каталога нет"}, "409": {description: "имя занято"}}}
+    delete: {summary: "Удалить пустой каталог: ?path=a/b; не рекурсивно", responses: {"204": {description: удалён}, "400": {description: "недопустимый путь, корень папки, ссылка (refused)"}, "404": {description: "папки или каталога нет"}, "409": {description: "каталог не пуст"}}}
+  /api/v1/nas/shares/{name}/dirs/move:
+    post: {summary: "Перенести каталог в другой каталог той же общей папки: {path: каталог, to: новый родитель (\"\" — корень)}; имя сохраняется, без перезаписи; в себя/свой подкаталог — 400. Ответ {path, changed} (changed=false — тот же родитель)", responses: {"200": {description: ok}, "400": {description: "недопустимый путь, корень папки, в себя/подкаталог (invalid_request); ссылка/файл в пути, другая ФС (refused)"}, "404": {description: "папки, каталога или целевого каталога нет"}, "409": {description: "в целевом каталоге имя занято"}}}
+  /api/v1/nas/shares/{name}/access:
+    put: {summary: "Заменить права: {access: [{kind: user|group, subject, level: none|read|rw}]}", responses: {"200": {description: "папка с правами"}, "400": {description: "ошибка"}}}
+  /api/v1/apps:
+    get: {summary: "Приложения Docker: состояние подсистемы. ?refresh=1 — сверить сейчас (если не идёт действие)", responses: {"200": {description: "AppsState", content: {application/json: {schema: {$ref: "#/components/schemas/AppsState"}}}}, "503": {description: "apps_unavailable — подсистема не настроена в gamayund"}}}
+  /api/v1/apps/enable:
+    post: {summary: "Включить приложения на пуле: {pool}. Задача apps.enable: субтомы .apps/{docker,containerd,appdata}, конфиги Docker на пул, запуск; сбой — откат в исходное (настройка снята, созданный .apps удалён), задача failed с причиной. Событие apps.enabled", responses: {"202": {description: "Task"}, "400": {description: "invalid_request — имя пула"}, "404": {description: "not_found — нет пула"}, "409": {description: "conflict — пакет gamayun-nas-apps не установлен; уже включено на другом пуле (перенос — позже); пул не смонтирован или под защитой только для чтения"}, "503": {description: "apps_unavailable, helper_unavailable"}}}
+  /api/v1/apps/disable:
+    post: {summary: "Выключить приложения: остановить Docker, снять настройку (данные на пуле остаются). Задача apps.disable, событие apps.disabled", responses: {"202": {description: "Task"}, "409": {description: "conflict — не включено"}}}
+  /api/v1/apps/resume:
+    post: {summary: "Возобновить после паузы (пул был только для чтения) или ошибки запуска: остановка Docker, umount + mount пула приложений, если он всё ещё RO (принудительный RO Btrfs снимается только так), запуск. Задача apps.resume, событие apps.resumed", responses: {"202": {description: "Task"}, "409": {description: "conflict — не включено, не приостановлено; пул под защитой «только чтение» или не смонтирован"}}}
+  /api/v1/apps/catalog:
+    get: {summary: "Каталог приложений: {state: {serial, key_id, source, loaded_at, apps}, source_url, keys (число доверенных ключей), apps: [{manifest (x-gamayun schema 1), images}], error — каталог на диске не прошёл повторную проверку подписи/хэшей}", responses: {"200": {description: "CatalogView"}, "503": {description: "catalog_unavailable"}}}
+  /api/v1/apps/catalog/refresh:
+    post: {summary: "Загрузить каталог с catalog.url (https; http — только catalog.allow_http на стенде): tar.gz до 64 МиБ → подпись ed25519 доверенным ключом → sha256 каждого файла, нет лишних → манифесты совпадают с индексом → serial не меньше текущего → атомарная замена (предыдущий — previous)", responses: {"200": {description: "CatalogView"}, "409": {description: "catalog_no_source — адрес не задан; catalog_rollback — serial меньше текущего"}, "422": {description: "catalog_invalid — подпись, подмена файла, формат"}}}
+  /api/v1/apps/catalog/import:
+    post: {summary: "Импорт архива каталога файлом (офлайн): тело application/octet-stream; проверки как refresh. ?allow_rollback=1 — пользователь подтвердил установку более старого каталога", responses: {"200": {description: "CatalogView"}, "400": {description: "invalid_request — Content-Type"}, "409": {description: "catalog_rollback"}, "413": {description: "too_large"}, "422": {description: "catalog_invalid"}}}
+  /api/v1/apps/catalog/{app}/check:
+    post: {summary: "Проверить установку приложения каталога без побочных эффектов : {id (пусто — id каталога), values {КЛЮЧ: значение} по x-gamayun.form, network, confirm, run_as} → CheckResult как /apps/projects/check. Порядок: каталог перепроверяется (подпись, sha256) → совместимость (os_min, архитектура, RAM, свободно на пуле) → форма (required, regex, select, show_if; random генерирует gamayund; секрет в compose допустим только как environment KEY: ${KEY}, иначе forbidden secret_ref; share → путь папки + выдача ro/rw по storage.readonly) → нормализация. Риск compose, не задекларированный в x-gamayun.security, — forbidden catalog_undeclared_risk; задекларированный — подтверждение (unconfirmed). Секреты не возвращаются", responses: {"200": {description: "CheckResult"}, "400": {description: "invalid_request — форма, несовместимость, каталог не прошёл проверку"}, "404": {description: "not_found — приложения нет в каталоге"}, "409": {description: "приложение с таким id уже есть"}, "503": {description: "каталог или приложения не настроены"}}}
+  /api/v1/apps/catalog/{app}/install:
+    post: {summary: "Установить приложение каталога: тело как /check. Задача apps.project.create: учётка app-<id> → выдачи → субтом данных → файлы (user.env — обычные поля; secrets-<сервис>.env 0600 — у каждого сервиса только секреты, на которые он ссылается, в контейнер через env_file; в compose.json и предпросмотре их нет; ключи — в catalog.secrets записи) → up --wait → ожидание готовности (health.service healthy и все контейнеры running за health.timeout_s, затем grace_s без падений). Сбой на любом шаге — полный откат (down -v, файлы, субтом, выдачи, учётка), failed с причиной. Запись: kind catalog, catalog {app, version, app_version, serial, images, secrets}; web публикуется по умолчанию (поддомен = id), если имя свободно", responses: {"202": {description: "Task"}, "400": {description: "invalid_request"}, "404": {description: "not_found"}, "409": {description: "conflict — id занят, неподтверждённые риски, порт, Docker не работает"}, "503": {description: "не настроено"}}}
+  /api/v1/apps/projects/{id}/catalog-update/check:
+    post: {summary: "Проверить обновление приложения каталога до версии текущего каталога: {values: {новые поля формы}, confirm: [ключи рисков]} → CheckResult + {from, to, migration_irreversible}. Прежние значения формы и секреты берутся из файлов приложения, новые random генерируются. Доступ к общим папкам при обновлении не меняется (иначе 400). Версия не новее установленной — 409", responses: {"200": {description: "CatalogUpdateCheck"}, "400": {description: "форма, недекларированный риск, изменение доступа"}, "404": {description: "not_found"}, "409": {description: "не из каталога, обновлять нечего"}}}
+  /api/v1/apps/projects/{id}/catalog-update:
+    post: {summary: "Обновить приложение каталога: тело как /check. Задача apps.catalog.update: новые файлы (прежние — резервная копия) → pull → down → точка восстановления (ro-снимок appdata/<id> + прежние файлы) → up → ожидание готовности. Каждый шаг пишется в журнал транзакции (settings apps.txn.<id>). Сбой — автооткат: down, данные и файлы из точки, up прежней версии; событие apps.app_rolled_back (warning, auto=true). Прерывание (перезапуск gamayund, питание) — откат при следующем старте Docker. Хранится 3 точки (catalog.points). Событие apps.app_updated {from, to}", responses: {"202": {description: "Task"}, "400": {description: "invalid_request"}, "404": {description: "not_found"}, "409": {description: "conflict"}}}
+  /api/v1/apps/projects/{id}/catalog-rollback:
+    post: {summary: "Ручной откат приложения каталога на предыдущую версию (последняя точка восстановления). ВНИМАНИЕ: данные, изменённые после обновления, теряются (субтом данных возвращается из снимка). Задача apps.catalog.rollback: down → данные и файлы из точки → up; точка удаляется. Сбой — приложение остановлено, error с причиной, откат можно повторить. Событие apps.app_rolled_back (auto=false)", responses: {"202": {description: "Task"}, "404": {description: "not_found"}, "409": {description: "нет предыдущей версии, не из каталога, Docker не работает"}}}
+  /api/v1/apps/projects/{id}/override/check:
+    post: {summary: "Проверить правки пользователя приложения каталога без побочных эффектов: {override: текст override.yaml, confirm: [ключи рисков]} → CheckResult. Формат override.yaml: только services.<существующий сервис>; словари сливаются рекурсивно, environment/labels — по ключу, прочие списки и значения заменяются. Риски, добавленные правками, подтверждаются как в П2 (не считаются недекларированными в каталоге)", responses: {"200": {description: "CheckResult"}, "400": {description: "invalid_request — ошибка override.yaml (YAML, лишний ключ, нет сервиса)"}, "404": {description: "not_found"}, "409": {description: "не из каталога; Docker не работает"}}}
+  /api/v1/apps/projects/{id}/override:
+    put: {summary: "Сохранить override.yaml приложения каталога ({override, confirm}; пустой override — правки убраны) и пересоздать приложение: задача apps.project.update (запись с резервной копией, up; сбой — прежние файлы). Правки переживают обновление версии каталога: накладываются на новую версию при проверке; несовместимы (нет сервиса, запрет) — проверка обновления не проходит, приложение не трогается. Текущий override — поле override в GET /apps/projects/{id}", responses: {"202": {description: "Task"}, "400": {description: "invalid_request"}, "404": {description: "not_found"}, "409": {description: "conflict — не из каталога, неподтверждённые риски"}}}
+  /api/v1/apps/projects:
+    get: {summary: "Пользовательские приложения: {projects: [AppProject], foreign: число контейнеров вне приложений, apps: AppsState}. Состояния: running, running_no_check, starting, unhealthy, crashing, stopped, error, waiting_pool, paused, removed, unknown", responses: {"200": {description: "список"}}}
+    post: {summary: "Создать приложение: AppProjectRequest. Проверка как /check; запреты → 400, конфликт портов/неподтверждённые риски/Docker не работает → 409. Задача apps.project.create: субтом данных, файлы, docker compose up --wait; сбой — откат (down -v, файлы, созданный субтом), failed с причиной. События apps.app_created, apps.risk_confirmed (warning: кто, какие риски)", responses: {"202": {description: "Task"}, "400": {description: "invalid_request — запрет compose, id, название"}, "409": {description: "conflict"}}}
+  /api/v1/apps/projects/check:
+    post: {summary: "Проверить compose без побочных эффектов: AppProjectRequest (+ run_as {сервис: uid|puid|root}, grants {папка: ro|rw}, migrate) → {changes, forbidden, risks[{code,key,detail}], ports, services, no_health, mkdirs, conflicts, normalized (секреты ***), env_keys, unconfirmed, ok, uid, run_as, share_binds[{service, share, target, read_only, grant}]}. env: null — переменные текущего приложения. bind в общую папку без выдачи — forbidden share_not_granted; «только чтение» — монтирование read_only; root + запись — риск root_share_write", responses: {"200": {description: "CheckResult"}, "409": {description: "conflict — приложения не включены"}}}
+  /api/v1/apps/projects/{id}:
+    get: {summary: "Приложение: запись, состояние, контейнеры, исходный compose, имена переменных (значения не отдаются); у приложения каталога — override (текст override.yaml)", responses: {"200": {description: "AppProjectDetail"}, "404": {description: "not_found"}}}
+    put: {summary: "Изменить приложение: AppProjectRequest (env: null — оставить). Задача apps.project.update: запись с резервной копией, up; сбой — прежняя версия и её запуск, failed с причиной", responses: {"202": {description: "Task"}, "400": {description: "invalid_request"}, "404": {description: "not_found"}, "409": {description: "conflict"}}}
+    delete: {summary: "Удалить приложение. ?keep_data=0 — вместе с данными (субтом и именованные тома), по умолчанию данные сохраняются (состояние removed). Задача apps.project.delete, событие apps.app_deleted", responses: {"202": {description: "Task"}, "404": {description: "not_found"}}}
+  /api/v1/apps/projects/{id}/{action}:
+    post: {summary: "action: start | stop | restart. Задача apps.project.action; start снимает состояние «падает»", responses: {"202": {description: "Task"}, "400": {description: "invalid_request — действие"}, "404": {description: "not_found"}, "409": {description: "conflict — Docker не работает"}}}
+  /api/v1/apps/projects/{id}/logs:
+    get: {summary: "Журнал контейнера: ?service=&tail=200 (до 5000)&since=unix → {container, text, truncated}; не более 1 МиБ, снимок без потока", responses: {"200": {description: "логи"}, "404": {description: "not_found"}}}
+  /api/v1/apps/ports:
+    get: {summary: "Реестр портов: {ports: [{port, proto, owner: nas|app|system, title, app, service, network}]}. nas — службы NAS (не выдаются приложениям), system — занят на NAS другим процессом", responses: {"200": {description: "реестр"}}}
+  /api/v1/apps/projects/{id}/grants:
+    put: {summary: "Доступ приложения к общим папкам: {run_as: {сервис: uid|puid|root}, grants: {папка: ro|rw}}; compose прежний. Задача apps.project.update: новые выдачи (ACL заданием helper с ходом выполнения) → up → отзыв снятых (рекурсивно, вкл. default ACL); сбой — прежние файлы и выдачи. Приложение П2 без учётки — 409 (сначала migrate). Событие apps.access_changed", responses: {"202": {description: "Task"}, "400": {description: "папки нет, режим"}, "404": {description: "not_found"}, "409": {description: "conflict"}}}
+  /api/v1/apps/projects/{id}/migrate:
+    post: {summary: "Перевод приложения с прежней схемой «доступ как root» на свою учётку app-<id>: {run_as, grants, confirm}. Задача apps.project.migrate: учётка → владелец данных → выдачи → compose с user/PUID → up; сбой — прежний compose и запуск, выдачи сняты, данные снова root, учётка удалена. Событие apps.app_migrated", responses: {"202": {description: "Task"}, "404": {description: "not_found"}, "409": {description: "уже со своей учёткой; не подтверждены риски"}}}
+  /api/v1/apps/shares/{name}:
+    get: {summary: "Приложения с доступом к общей папке: {apps: [{id, name, mode: ro|rw|root}]} (root — приложение с доступом как root)", responses: {"200": {description: ok}}}
+  /api/v1/apps/projects/{id}/web:
+    put: {summary: "Публикация через прокси: {name, port} → https://<name>-<хост>.local/ с входом по учётке NAS (forward_auth). port — TCP приложения на 127.0.0.1; name — [a-z0-9-], до 32, уникально, метка с именем NAS ≤ 63. Ответ — приложение. Событие apps.app_web", responses: {"200": {description: Project}, "400": {description: "имя, порт"}, "404": {description: "not_found"}, "409": {description: "имя занято; у приложения идёт задача"}}}
+    delete: {summary: "Снять публикацию через прокси. Событие apps.app_web", responses: {"200": {description: Project}, "404": {description: "not_found"}, "409": {description: "у приложения идёт задача"}}}
+  /api/v1/apps/proxy:
+    get: {summary: "Состояние прокси приложений (Caddy): {available, domain, routes: [{app, name, port, host, url, mdns_error?}], applied, error?}. available=false — пакет gamayun-nas-apps не установлен или gamayun-caddy не запущен", responses: {"200": {description: ok}, "503": {description: "прокси не подключён"}}}
+  /api/v1/apps/proxy/ca.crt:
+    get: {summary: "Корневой сертификат внутреннего CA прокси (PEM, gamayun-nas Local CA) для установки на клиентах", responses: {"200": {description: "application/x-x509-ca-cert"}, "503": {description: "прокси не установлен или не запущен"}, "502": {description: "ошибка Caddy"}}}
+  /api/v1/tasks:
+    get:
+      summary: Последние задачи, новые первыми
+      operationId: listTasks
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Список
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: "#/components/schemas/Task" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+  /api/v1/tasks/{id}:
+    get:
+      summary: Задача
+      operationId: getTask
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Задача
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Task" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/events:
+    get:
+      summary: Поток событий (Server-Sent Events)
+      description: |
+        `text/event-stream`. Каждое сообщение: `event: <type>`,
+        `data: <Event JSON>`, для журнальных событий также `id: <n>`.
+
+        Типы сейчас: `task.state` (смена состояния; журналируется, `data` —
+        Task) и `task.progress` (без id, не журналируется, `data` —
+        `{"progress": n}`). Пинг — комментарий `: ping` раз в 15 с.
+
+        Без Last-Event-ID передаются только новые события: подписаться, затем
+        прочитать /api/v1/tasks. С Last-Event-ID (заголовок или параметр)
+        сначала досылаются журнальные события после него. Отстающий клиент
+        отключается и должен переподключиться с Last-Event-ID.
+      operationId: streamEvents
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: { type: integer, minimum: 0 }
+        - name: last_event_id
+          in: query
+          description: Альтернатива заголовку (для клиентов без его поддержки)
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "200":
+          description: Поток
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-dn_session
+      description: Серверная сессия; простой 30 мин, предельный срок 12 ч (настраиваются).
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Токен из `csrf_token` (вход, `GET /api/v1/auth/session`); обязателен для POST.
+  responses:
+    Unauthorized:
+      description: Нет действующей сессии (`unauthorized`, `session_expired`, `setup_required`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CSRFFailed:
+      description: Запрос отклонён защитой от CSRF (`csrf_failed`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooManyAttempts:
+      description: Временная блокировка после неудачных попыток (`too_many_attempts`)
+      headers:
+        Retry-After: { schema: { type: integer }, description: Секунд до снятия блокировки }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InvalidRequest:
+      description: Неверный запрос (`invalid_request`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Не найдено (`not_found`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    HelperUnavailable:
+      description: gamayun-helper недоступен (`helper_unavailable`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    HelperError:
+      description: gamayun-helper вернул ошибку (`helper_error`)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                invalid_request, not_found, method_not_allowed, plan_rejected,
+                plan_not_found, plan_expired, plan_stale, bad_token, conflict,
+                unsupported, too_many_plans, storage_unavailable,
+                helper_unavailable, helper_error, apps_unavailable, internal; аутентификация:
+                unauthorized, session_expired, setup_required, csrf_failed,
+                forbidden, invalid_credentials, too_many_attempts,
+                weak_password, invalid_setup_token, already_configured
+            message: { type: string }
+    Health:
+      type: object
+      required: [status, version, database]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        version: { type: string }
+        database: { type: string, enum: [ok, error] }
+    System:
+      type: object
+      required: [daemon, host]
+      properties:
+        daemon:
+          type: object
+          properties:
+            version: { type: string }
+        host:
+          type: object
+          description: null — значение не определено
+          properties:
+            hostname: { type: [string, "null"] }
+            kernel: { type: [string, "null"] }
+            os: { type: [string, "null"] }
+            arch: { type: string, example: arm64 }
+            board: { type: [string, "null"], description: Модель платы (device tree) }
+            cpu:
+              type: object
+              properties:
+                model: { type: [string, "null"] }
+                count: { type: integer }
+            memory:
+              type: object
+              properties:
+                total_bytes: { type: [integer, "null"] }
+                available_bytes: { type: [integer, "null"] }
+            uptime_seconds: { type: [number, "null"] }
+    DiskSnapshot:
+      type: object
+      required: [disks, complete, issues]
+      properties:
+        disks:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string, description: Временный алиас («Диск 1») }
+              kernel_name: { type: string, description: Только для диагностики }
+              id:
+                type: string
+                description: |
+                  Стабильная идентичность: wwn-0x…, eui-…, wwid-…, serial-…;
+                  отсутствует — не определена (разрушающие операции запрещены)
+              wwn: { type: string, description: "0x… (только NAA)" }
+              kind: { type: string, enum: [HDD, SSD, unknown] }
+              size_bytes: { type: [integer, "null"] }
+              model: { type: [string, "null"] }
+              system_roles:
+                type: array
+                items: { type: string, enum: [root, boot, efi, swap, mounted, stack_member] }
+              system_role: { type: string, enum: [root, system, in_use, unknown] }
+              unknown_reason: { type: string }
+        complete: { type: boolean }
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string }
+              mountpoint: { type: string }
+              fstype: { type: string }
+              source: { type: string }
+              reason: { type: string }
+    PlanRequest:
+      type: object
+      additionalProperties: false
+      required: [type, disks]
+      properties:
+        type:
+          type: string
+          enum: [basic, jbod, raid0, raid1, raid5, raid6, raid10, shr, shr2]
+        disks:
+          type: array
+          maxItems: 64
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, size_bytes]
+            properties:
+              id: { type: string, minLength: 1, maxLength: 128 }
+              size_bytes: { type: integer, minimum: 1 }
+        system_reserve_bytes:
+          type: integer
+          minimum: 0
+          description: Место на каждом диске под системные разделы
+    Plan:
+      type: object
+      required: [type, arrays, usable_bytes, raw_bytes, unused_bytes, tolerance, warnings, transitions]
+      properties:
+        type: { type: string }
+        arrays:
+          type: array
+          items:
+            type: object
+            properties:
+              level: { type: string, enum: [single, linear, raid0, raid1, raid5, raid6, raid10] }
+              members: { type: array, items: { type: string } }
+              slice_size_bytes: { type: integer }
+              usable_bytes: { type: integer }
+              tolerance: { type: integer }
+        usable_bytes: { type: integer }
+        raw_bytes: { type: integer }
+        unused_bytes: { type: integer }
+        tolerance: { type: integer, description: Гарантированно переживаемых отказов дисков }
+        warnings: { type: array, items: { type: string } }
+        transitions:
+          type: array
+          items:
+            type: object
+            properties:
+              op: { type: string, enum: [add_disk, add_mirror, convert, replace_larger] }
+              target: { type: string }
+              add_disks: { type: integer }
+              note: { type: string }
+              verified: { type: boolean }
+    PoolPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [op, pool]
+      properties:
+        op: { type: string, enum: [create, add_disk, replace] }
+        pool: { type: string, pattern: "^[a-z][a-z0-9]{0,15}$" }
+        type: { type: string, enum: [basic, jbod, raid0, raid1, raid5, raid6, raid10, shr, shr2] }
+        disk_ids: { type: array, items: { type: string } }
+        disk_id: { type: string }
+        integrity: { type: boolean, description: dm-integrity под md (самоисправление) }
+    ArraySpec:
+      type: object
+      properties:
+        level: { type: string, enum: [single, raid0, raid1, raid5, raid6, raid10] }
+        slice_bytes: { type: integer }
+        members: { type: array, items: { type: string } }
+    PoolPlan:
+      type: object
+      properties:
+        plan_id: { type: string }
+        confirm_token: { type: string, description: Одноразовый; только в этом ответе }
+        expires_at: { type: string, format: date-time }
+        op: { type: string }
+        pool: { type: string }
+        type: { type: string }
+        from_type: { type: string }
+        integrity: { type: boolean }
+        disks:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              kernel_name: { type: string }
+              size_bytes: { type: integer }
+              erase: { type: boolean }
+        arrays: { type: array, items: { $ref: "#/components/schemas/ArraySpec" } }
+        usable_bytes: { type: integer, description: По planner, до накладных расходов md/dm-integrity/LVM/Btrfs }
+        prev_usable_bytes: { type: integer }
+        tolerance: { type: integer }
+        transition_verified: { type: boolean }
+        warnings: { type: array, items: { type: string } }
+    Pool:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        integrity: { type: boolean }
+        disks:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              size_bytes: { type: integer }
+        arrays: { type: array, items: { $ref: "#/components/schemas/ArraySpec" } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        status_error: { type: string }
+        status:
+          type: [object, "null"]
+          properties:
+            pool: { type: string }
+            health: { type: string, enum: [ok, warning, resyncing, reshaping, rebuilding, degraded, failed, missing, unknown], description: "warning — массивы исправны, но Btrfs аварийно только для чтения (emergency_read_only)" }
+            arrays:
+              type: array
+              items:
+                type: object
+                properties:
+                  index: { type: integer }
+                  name: { type: string }
+                  device: { type: string }
+                  level: { type: string }
+                  state: { type: array, items: { type: string } }
+                  raid_devices: { type: integer }
+                  active_devices: { type: integer }
+                  failed_devices: { type: integer }
+                  spare_devices: { type: integer }
+                  missing: { type: integer }
+                  integrity: { type: boolean }
+                  action: { type: string, description: resync, recovery, reshape, check, repair }
+                  progress: { type: number }
+                  finish_min: { type: number }
+                  array_size_bytes: { type: integer }
+                  dev_size_bytes: { type: integer }
+                  mismatch_cnt: { type: integer }
+                  members:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        device: { type: string }
+                        state: { type: string }
+                        raid_device: { type: integer }
+                        disk_id: { type: string }
+            integrity:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { type: string }
+                  mismatches: { type: integer, description: Обнаруженные несовпадения контрольных сумм }
+                  provided_bytes: { type: integer }
+                  recalculating: { type: boolean }
+            vg_size_bytes: { type: integer }
+            vg_free_bytes: { type: integer }
+            lv_size_bytes: { type: integer }
+            mount: { type: string }
+            mounted: { type: boolean }
+            read_only: { type: boolean, description: "смонтирован только для чтения (точка или суперблок)" }
+            emergency_read_only: { type: boolean, description: "Btrfs аварийно только для чтения после ошибки записи (суперблок ro при rw точки); снимается umount/mount" }
+            btrfs:
+              type: object
+              properties:
+                device_size: { type: integer }
+                allocated: { type: integer }
+                used: { type: integer }
+                free_estimated: { type: integer }
+                free_statfs: { type: integer }
+                data_profile: { type: string }
+                metadata_profile: { type: string }
+            btrfs_errors: { type: object, additionalProperties: { type: integer } }
+            issues: { type: array, items: { type: string } }
+            disk_ids: { type: array, items: { type: string } }
+    AppsState:
+      type: object
+      description: |
+        Состояние подсистемы приложений. Тексты `reason` — по-русски; для перевода — `state` и `reason_code`.
+        События журнала: apps.enabled, apps.disabled, apps.started, apps.start_failed (warning), apps.paused (warning),
+        apps.unavailable (warning), apps.resumed; контейнеры (Subject `container:<имя>`, данные без меток и env):
+        apps.container_died (код ≠ 0, warning), apps.container_oom (warning), apps.container_unhealthy (warning),
+        apps.container_healthy, apps.container_restart; повтор одного вида на контейнер — не чаще раза в 5 мин
+        (`suppressed` — сколько пропущено).
+      required: [installed, enabled, state, containers_running, containers_total, checked_at]
+      properties:
+        installed: { type: boolean, description: Пакет gamayun-nas-apps установлен }
+        enabled: { type: boolean }
+        pool: { type: string, description: Пул приложений }
+        state: { type: string, enum: [disabled, not_installed, unavailable, paused, starting, running, error, unknown] }
+        reason_code: { type: string, enum: [not_installed, pool_missing, read_only, protection, resume_ready, start_failed, helper, config] }
+        reason: { type: string, description: "Например «Приложения недоступны: пул X не подключён»" }
+        docker: { type: string, description: "systemctl is-active docker: active, inactive, failed…" }
+        version: { type: string }
+        containers_running: { type: integer }
+        containers_total: { type: integer }
+        checked_at: { type: string, format: date-time }
+    Task:
+      type: object
+      required: [id, kind, state, progress, params, created_at, updated_at]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        state:
+          type: string
+          enum: [queued, running, succeeded, failed, interrupted]
+          description: |
+            interrupted — демон остановился или упал, пока задача была
+            queued/running; задача не возобновляется автоматически.
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        params: {}
+        result: {}
+        error:
+          type: object
+          properties:
+            code: { type: string, enum: [interrupted, cancelled, task_failed, panic] }
+            message: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+    Event:
+      type: object
+      required: [type, time]
+      properties:
+        id: { type: integer, description: Отсутствует у эфемерных событий }
+        type: { type: string, example: task.state }
+        time: { type: string, format: date-time }
+        task_id: { type: string }
+        data: {}
+        protection:
+          type: object
+          description: Защита read-only; из неё веб-интерфейс строит баннер
+          properties:
+            enabled: { type: boolean }
+            redundancy_exhausted: { type: [boolean, "null"] }
+            reason: { type: string }
+            write_blocked: { type: boolean }
+            read_only: { type: boolean }
+            enforced: { type: boolean }
+            override:
+              type: [object, "null"]
+              properties:
+                actor: { type: string }
+                reason: { type: string }
+                created_at: { type: string, format: date-time }
+                expires_at: { type: string, format: date-time }
+    LoginRequest:
+      type: object
+      required: [username, password]
+      additionalProperties: false
+      properties:
+        username: { type: string, description: Регистр не важен }
+        password: { type: string, maxLength: 1024 }
+    PasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      additionalProperties: false
+      properties:
+        current_password: { type: string }
+        new_password: { type: string, minLength: 10 }
+    SetupRequest:
+      type: object
+      required: [setup_token, username, password]
+      additionalProperties: false
+      properties:
+        setup_token: { type: string }
+        username: { type: string, pattern: "^[a-z_][a-z0-9_-]{0,31}$" }
+        password: { type: string, minLength: 10 }
+    Session:
+      type: object
+      required: [user, csrf_token, created_at, expires_at, idle_timeout_seconds]
+      properties:
+        user:
+          type: object
+          required: [id, name, is_admin]
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            is_admin: { type: boolean }
+        csrf_token: { type: string, description: Для заголовка X-CSRF-Token }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: Предельный срок сессии }
+        idle_timeout_seconds: { type: integer }

@@ -1,0 +1,10 @@
+#!/bin/sh
+# gamayun-nas prerm: остановка служб при удалении. При обновлении службы
+# не останавливаются здесь — postinst новой версии перезапускает их (простой — секунды).
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop gamayund.service gamayun-helper.service >/dev/null 2>&1 || true
+    systemctl disable gamayund.service gamayun-helper.service gamayun-integrity.service >/dev/null 2>&1 || true ;;
+esac
+exit 0

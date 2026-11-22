@@ -1,0 +1,42 @@
+# gamayun-helper — привилегированный исполнитель gamayun-nas (root).
+# Выполняет только операции фиксированного реестра для uid пользователя gamayun.
+# Конфигурация /etc/gamayun-nas/gamayun-helper.json (destructive_allow_ids — только явно разрешённые диски).
+[Unit]
+Description=gamayun-nas privileged helper
+Documentation=file:///usr/share/doc/gamayun-nas/README.md
+# Сокет нужен до запуска gamayund.
+Before=gamayund.service
+
+[Service]
+Type=simple
+User=root
+# Группа процесса gamayun: каталог сокета root:gamayun 0750, сокет 0660.
+Group=gamayun
+ExecStart=/usr/lib/gamayun-nas/gamayun-helper -socket /run/gamayun-helper/helper.sock -group gamayun -allow-user gamayun -config /etc/gamayun-nas/gamayun-helper.json
+RuntimeDirectory=gamayun-helper
+RuntimeDirectoryMode=0750
+Restart=on-failure
+RestartSec=2s
+# Дочерние процессы будущих операций завершаются вместе со службой.
+KillMode=control-group
+UMask=0077
+
+# Hardening. Helper — root, он выполняет mdadm,
+# lvm, integritysetup, mkfs.btrfs, mount, useradd, smbpasswd, поэтому:
+#  - нет CapabilityBoundingSet: набор нужных возможностей слишком широк
+#    (SYS_ADMIN, MKNOD, SYS_RAWIO, CHOWN, FOWNER, DAC_*, SETUID/SETGID, ...);
+#  - AF_NETLINK нужен libudev/lvm/mdadm;
+#  - SystemCallFilter и MemoryDenyWriteExecute убраны: mount/ioctl блочных
+#    устройств и lvm (mlockall) под ними не работают;
+#  - без ProtectSystem/PrivateTmp/PrivateDevices/Protect*: helper должен видеть
+#    настоящие /dev, /proc/self/mountinfo и писать в /etc/samba, /etc/passwd, /srv.
+# Допущенные клиенты и список операций ограничены кодом helper (uid gamayun, реестр).
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

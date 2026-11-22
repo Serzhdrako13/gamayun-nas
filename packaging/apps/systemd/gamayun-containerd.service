@@ -1,0 +1,24 @@
+# gamayun-nas-apps: containerd из пакета, данные на пуле приложений.
+# Не включается при загрузке: запускает только gamayund (через gamayun-helper) после монтирования пула.
+# Путь пула и Condition — drop-in gamayun-containerd.service.d/pool.conf, пишет gamayun-helper.
+[Unit]
+# Только по команде gamayund: флаг ставит gamayun-helper apps.start; /run очищается при загрузке.
+ConditionPathExists=/run/gamayun-nas-apps/start
+Description=gamayun-nas apps: containerd
+After=network.target local-fs.target
+# Без drop-in пула служба не стартует никогда.
+ConditionPathExists=/etc/gamayun-nas/apps/containerd.toml
+
+[Service]
+ExecStartPre=-/sbin/modprobe overlay
+ExecStart=/usr/lib/gamayun-nas-apps/bin/containerd --config /etc/gamayun-nas/apps/containerd.toml
+Environment=PATH=/usr/lib/gamayun-nas-apps/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Type=notify
+Delegate=yes
+KillMode=process
+Restart=on-failure
+RestartSec=5
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+OOMScoreAdjust=-999

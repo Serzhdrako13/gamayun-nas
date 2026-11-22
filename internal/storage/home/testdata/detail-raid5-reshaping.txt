@@ -1,0 +1,33 @@
+/dev/md/probe-0:
+           Version : 1.2
+     Creation Time : Wed Nov  4 19:47:48 2026
+        Raid Level : raid5
+        Array Size : 1036416 (1012.13 MiB 1061.29 MB)
+     Used Dev Size : 1036416 (1012.13 MiB 1061.29 MB)
+      Raid Devices : 3
+     Total Devices : 3
+       Persistence : Superblock is persistent
+
+       Update Time : Wed Nov  4 19:48:23 2026
+             State : clean, reshaping 
+    Active Devices : 3
+   Working Devices : 3
+    Failed Devices : 0
+     Spare Devices : 0
+
+            Layout : left-symmetric
+        Chunk Size : 64K
+
+Consistency Policy : resync
+
+    Reshape Status : 1% complete
+     Delta Devices : 1, (2->3)
+
+              Name : nas-lab:probe-0  (local to host nas-lab)
+              UUID : 62df258e:85c151f2:59e52bd7:c39773c3
+            Events : 32
+
+    Number   Major   Minor   RaidDevice State
+       0     253        0        0      active sync   /dev/dm-0
+       1     253        1        1      active sync   /dev/dm-1
+       2     253        3        2      active sync   /dev/dm-3

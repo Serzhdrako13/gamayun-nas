@@ -1,0 +1,28 @@
+// Notification quiet period (F3-34): lib/quiet.js, lib/QuietCard.svelte.
+export default {
+  preset: { '1h': '1 hour', '4h': '4 hours', tomorrow: 'until tomorrow, 09:00', custom: 'custom' },
+  text: {
+    off: 'Notifications are sent as usual.',
+    until: 'Quiet until {until}: {reason}.',
+    criticalMuted: ' Critical ones are not sent either.',
+    criticalSent: ' Critical ones are sent.',
+    suppressed: ' Not sent: {count}',
+    suppressedCritical: ', of them critical: {count}',
+  },
+  title: 'Quiet period during maintenance',
+  on: 'on',
+  ending: 'Quiet period is ending…',
+  customLabel: 'Until (local time, at most 7 days)',
+  reason: 'Reason',
+  reasonPlaceholder: 'replacing a disk in pool data',
+  muteCritical: 'do not send critical ones either',
+  muteCriticalWarn: 'Critical events (disk failure, disk dropped out of the array) will not be sent by email or webhook until the quiet period ends either. Turn this on only if someone is watching the server on site.',
+  change: 'Change end time',
+  start: 'Start quiet period',
+  stop: 'Cancel quiet period',
+  untilShort: 'until {time}',
+  errTerm: 'Quiet period end: in the future and at most 7 days away',
+  errReason: 'Enter a reason',
+  startedFlash: 'Quiet until {time}',
+  stoppedFlash: 'Quiet period cancelled',
+};

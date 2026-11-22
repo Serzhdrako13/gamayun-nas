@@ -1,0 +1,28 @@
+/dev/md/int5-0:
+           Version : 1.2
+     Creation Time : Thu Nov  5 12:14:23 2026
+        Raid Level : raid1
+        Array Size : 1036416 (1012.13 MiB 1061.29 MB)
+     Used Dev Size : 1036416 (1012.13 MiB 1061.29 MB)
+      Raid Devices : 2
+     Total Devices : 2
+       Persistence : Superblock is persistent
+
+     Intent Bitmap : Internal
+
+       Update Time : Thu Nov  5 12:14:51 2026
+             State : clean 
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 0
+
+Consistency Policy : bitmap
+
+              Name : nas-lab:int5-0  (local to host nas-lab)
+              UUID : a47850ee:81aa0439:4fb4bf15:479d165e
+            Events : 22
+
+    Number   Major   Minor   RaidDevice State
+       0     253        0        0      active sync   /dev/dm-0
+       1     253        1        1      active sync   /dev/dm-1

@@ -1,0 +1,36 @@
+// Словарь en — сборка пространств имён (по файлу на раздел).
+import common from './common.js';
+import app from './app.js';
+import power from './power.js';
+import sections from './sections.js';
+import events from './events.js';
+import widgets from './widgets.js';
+import ui from './ui.js';
+import settings from './settings.js';
+import quiet from './quiet.js';
+import identity from './identity.js';
+import channels from './channels.js';
+import notifications from './notifications.js';
+import files from './files.js';
+import names from './names.js';
+import dirs from './dirs.js';
+import snapshots from './snapshots.js';
+import shares from './shares.js';
+import pools from './pools.js';
+import foundPools from './foundPools.js';
+import poolDetail from './poolDetail.js';
+import poolWizard from './poolWizard.js';
+import disks from './disks.js';
+import format from './format.js';
+import smart from './smart.js';
+import home from './home.js';
+import journal from './journal.js';
+import users from './users.js';
+import confbackup from './confbackup.js';
+import restore from './restore.js';
+import wizard from './wizard.js';
+import login from './login.js';
+import help from './help.js';
+import apps from './apps.js';
+
+export default { common, app, power, sections, events, widgets, ui, settings, quiet, identity, channels, notifications, files, names, dirs, snapshots, shares, pools, foundPools, poolDetail, poolWizard, disks, format, smart, home, journal, users, confbackup, restore, wizard, login, help, apps };

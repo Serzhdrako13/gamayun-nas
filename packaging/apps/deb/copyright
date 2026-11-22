@@ -1,0 +1,44 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: GamayunNas apps
+Source: https://github.com/Serzhdrako13/gamayun-nas
+
+Files: usr/lib/systemd/system/* usr/share/doc/gamayun-nas-apps/README.md
+Copyright: 2026 Serzhdrako13
+License: Elastic-2.0
+ The full text is in /usr/share/doc/gamayun-nas/LICENSE.
+
+Files: usr/lib/gamayun-nas-apps/bin/docker* usr/lib/gamayun-nas-apps/bin/containerd* usr/lib/gamayun-nas-apps/bin/ctr usr/lib/gamayun-nas-apps/bin/runc
+Copyright: Docker, Inc. and the Moby, containerd and runc authors
+Comment: Unmodified static binaries from https://download.docker.com/linux/static/stable/
+ and https://github.com/docker/compose/releases (versions in versions.lock).
+License: Apache-2.0
+ The full text is in /usr/share/doc/gamayun-nas-apps/Apache-2.0.txt.
+
+Files: usr/lib/gamayun-nas-apps/bin/docker-init
+Copyright: Thomas Orozco and tini contributors
+Comment: tini, shipped inside the Docker static archive.
+License: MIT
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+
+Files: usr/lib/gamayun-nas-apps/bin/caddy
+Copyright: Matthew Holt and The Caddy Authors
+Comment: Unmodified binary from https://github.com/caddyserver/caddy/releases.
+License: Apache-2.0
+ The full text is in /usr/share/doc/gamayun-nas-apps/Apache-2.0.txt
+ (also LICENSE.caddy from the upstream archive).

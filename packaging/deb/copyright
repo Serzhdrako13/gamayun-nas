@@ -1,0 +1,13 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: GamayunNas
+Source: https://github.com/Serzhdrako13/gamayun-nas
+
+Files: *
+Copyright: 2026 Serzhdrako13
+License: Elastic-2.0
+ The full text is in /usr/share/doc/gamayun-nas/LICENSE.
+
+Files: usr/lib/gamayun-nas/gamayund usr/lib/gamayun-nas/gamayun-helper
+Comment: The binaries statically include third-party Go modules (MIT, BSD) and the
+ web interface includes Svelte (MIT). Their licenses are reproduced in
+ /usr/share/doc/gamayun-nas/THIRD-PARTY.txt.

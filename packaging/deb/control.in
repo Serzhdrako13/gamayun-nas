@@ -1,0 +1,17 @@
+Package: gamayun-nas
+Version: @VERSION@
+Architecture: amd64
+Maintainer: Serzhdrako13 <serzhdrako13@gmail.com>
+Homepage: https://github.com/Serzhdrako13/gamayun-nas
+Section: admin
+Priority: optional
+Depends: systemd, udev, util-linux, mount, procps, passwd, sudo, openssh-server, samba, samba-common-bin, samba-vfs-modules, cryptsetup-bin, dmsetup, mdadm, lvm2, btrfs-progs, gdisk, smartmontools, fail2ban, python3-systemd, nftables
+Recommends: smbclient, avahi-daemon
+Installed-Size: @SIZE@
+Description: GamayunNas — home NAS (alpha)
+ Management daemon gamayund (HTTPS API and web interface), privileged helper
+ gamayun-helper and early dm-integrity activation (gamayun-integrity).
+ Storage pools (RAID/SHR on mdadm + LVM + Btrfs with optional dm-integrity),
+ SMB/SFTP shares, users, snapshots, notifications, scheduled scrub and SMART.
+ Configuration (/var/lib/gamayun-nas) and pools survive package removal
+ and reinstallation.

@@ -1,0 +1,25 @@
+Overall:
+    Device size:		        1056964608
+    Device allocated:		         130809856
+    Device unallocated:		         926154752
+    Device missing:		                 0
+    Device slack:		                 0
+    Used:			            294912
+    Free (estimated):		         934543360	(min: 471465984)
+    Free (statfs, df):		         933494784
+    Data ratio:			              1.00
+    Metadata ratio:		              2.00
+    Global reserve:		           5767168	(used: 0)
+    Multiple profiles:		                no
+
+Data,single: Size:8388608, Used:0 (0.00%)
+   /dev/mapper/dn_probe-data	   8388608
+
+Metadata,DUP: Size:52822016, Used:131072 (0.25%)
+   /dev/mapper/dn_probe-data	 105644032
+
+System,DUP: Size:8388608, Used:16384 (0.20%)
+   /dev/mapper/dn_probe-data	  16777216
+
+Unallocated:
+   /dev/mapper/dn_probe-data	 926154752

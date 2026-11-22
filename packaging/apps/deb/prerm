@@ -1,0 +1,47 @@
+#!/bin/sh
+# gamayun-nas-apps prerm: при удалении — остановить службы (контейнеры останавливаются, данные на пуле целы).
+# containerd с KillMode=process — если dockerd не остановил контейнеры сам (упал раньше), shim и
+# процессы контейнеров (docker-*.scope) переживают остановку служб и держат пул. Их — TERM, затем KILL;
+# не остановились — ошибка с перечнем (удаление прерывается, а не оставляет контейнеры без Docker).
+set -e
+SHIM=/usr/lib/gamayun-nas-apps/bin/containerd-shim-runc-v2
+
+leftovers() {
+  for d in /proc/[0-9]*; do
+    if grep -qE '/docker-[0-9a-f]{12,64}\.scope(/|$)' "$d/cgroup" 2>/dev/null; then
+      echo "${d#/proc/} $(cat "$d/comm" 2>/dev/null) ($(grep -oE 'docker-[0-9a-f]{12,64}\.scope' "$d/cgroup" 2>/dev/null | head -1))"
+    elif [ "$(readlink "$d/exe" 2>/dev/null)" = "$SHIM" ]; then
+      echo "${d#/proc/} $(cat "$d/comm" 2>/dev/null)"
+    fi
+  done
+}
+
+reap() {
+  l=$(leftovers)
+  [ -n "$l" ] || return 0
+  echo "gamayun-nas-apps: после остановки Docker остались процессы контейнеров, останавливаю:" >&2
+  echo "$l" | sed 's/^/  /' >&2
+  for sig in TERM KILL; do
+    echo "$l" | awk '{print $1}' | xargs -r kill -s $sig 2>/dev/null || true
+    i=0; while [ $i -lt 20 ] && [ -n "$(leftovers)" ]; do sleep 0.5; i=$((i+1)); done
+    l=$(leftovers); [ -n "$l" ] || break
+  done
+  systemctl stop 'docker-*.scope' 2>/dev/null || true
+  l=$(leftovers)
+  if [ -n "$l" ]; then
+    echo "gamayun-nas-apps: не удалось остановить процессы контейнеров — удаление прервано:" >&2
+    echo "$l" | sed 's/^/  /' >&2
+    return 1
+  fi
+}
+
+case "$1" in
+  remove|deconfigure)
+    rm -f /run/gamayun-nas-apps/start
+    systemctl disable --now gamayun-caddy.service 2>/dev/null || true
+    systemctl stop gamayun-docker.service gamayun-containerd.service 2>/dev/null || true
+    reap
+    # overlay корней контейнеров, оставшиеся без dockerd, держат пул (umount — «target is busy»)
+    findmnt -rn -o TARGET | grep -E '^/srv/gamayun-nas/[^/]+/\.apps/' | sort -r | while read -r t; do umount "$t" || true; done ;;
+esac
+exit 0

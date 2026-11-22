@@ -1,0 +1,38 @@
+/* Тёмная тема по умолчанию: стекло как в CasaOS —
+   почти прозрачные панели, лёгкая дымчатая тонировка ~5–7 %, слабое размытие;
+   обои с горами (public/bg/mountains.svg). Только токены. */
+:root, :root[data-theme='dark'] {
+  --wallpaper: url('/bg/mountains.svg');
+  --bg: #0b1e2c;
+  --glass: rgb(30 45 60 / 7%);
+  --solid: rgb(16 32 46 / 62%);
+  --surface: var(--glass);
+  --surface2: rgb(255 255 255 / 8%);
+  --field: rgb(255 255 255 / 10%);
+  --text: #ffffff;
+  --muted: #c4d3df;
+  --line: rgb(255 255 255 / 14%);
+  --track: rgb(255 255 255 / 28%);
+  --accent: #1e88ff;
+  --accent2: #2fe0b0;
+  --accent-text: #ffffff;
+  --ok: #3ddc84;
+  --warn: #ffb54d;
+  --bad: #ff7b7b;
+  --info: #9cc0de;
+  --net-rx: #2e9bff;
+  --net-tx: #ff9f2e;
+  --warn-bg: rgb(120 80 10 / 35%);
+  --bad-bg: rgb(130 30 30 / 35%);
+  --ok-bg: rgb(20 90 50 / 35%);
+  --scrim: rgb(0 10 20 / 40%);
+  --radius: 10px;
+  --shadow: 0 12px 32px rgb(0 0 0 / 25%);
+  --blur: blur(3px);
+  --on-bad: #ffffff;
+  --option-bg: #12263a;
+  --text-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+  color-scheme: dark;
+  --knob: #ffffff;
+  --knob-shadow: 0 1px 3px rgb(0 0 0 / 35%);
+}

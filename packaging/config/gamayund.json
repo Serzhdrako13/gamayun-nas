@@ -1,0 +1,17 @@
+{
+  "listen": "0.0.0.0:8780",
+  "helper_socket": "/run/gamayun-helper/helper.sock",
+  "database": "/var/lib/gamayun-nas/gamayun.db",
+  "insecure_allow_remote": false,
+  "tls": {
+    "disable": false,
+    "cert_file": "",
+    "key_file": "",
+    "redirect_listen": ""
+  },
+  "auth": {
+    "disable": false,
+    "session_idle": "30m",
+    "session_absolute": "12h"
+  }
+}

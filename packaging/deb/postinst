@@ -1,0 +1,78 @@
+#!/bin/sh
+# gamayun-nas postinst. Идемпотентно: повторный configure ничего не ломает.
+set -e
+[ "$1" = configure ] || exit 0
+SH=/usr/share/gamayun-nas
+B=/var/backups/gamayun-nas
+systemd-sysusers /usr/lib/sysusers.d/gamayun-nas.conf
+# Конфиги — не conffiles: кладём умолчания только если файла нет, существующие не трогаем.
+install -d -m 0755 /etc/gamayun-nas
+for f in gamayund.json gamayun-helper.json; do
+  [ -e /etc/gamayun-nas/$f ] || install -m 0644 $SH/$f /etc/gamayun-nas/$f
+done
+install -d -m 0755 /srv/gamayun-nas
+# Юниты с тем же именем в /etc/systemd/system (ручная установка из исходников) перекрыли бы
+# юниты пакета. Убираем в резервную копию только свои (ExecStart из /usr/lib/gamayun-nas).
+for u in gamayund gamayun-helper gamayun-integrity; do
+  f=/etc/systemd/system/$u.service
+  if [ -f "$f" ] && [ ! -L "$f" ] && grep -q '/usr/lib/gamayun-nas/' "$f"; then
+    install -d -m 0700 $B; mv "$f" $B/$u.service.pre-deb; echo "gamayun-nas: $f → $B/ (юнит пакета)"
+  fi
+done
+# Ссылки включения (*.wants) на перенесённые юниты повисли бы — убрать, enable ниже создаст заново.
+find /etc/systemd/system -xtype l -name 'gamayun*.service' -path '*.wants/*' -delete
+# smartd не нужен: SMART ведёт gamayund.
+if systemctl is-enabled smartmontools.service >/dev/null 2>&1; then
+  systemctl disable --now smartmontools.service >/dev/null 2>&1 || true
+fi
+# fail2ban: включается только из веба. Drop-in «выключено» — один раз, при первой установке.
+if [ -z "$2" ] && [ ! -e /etc/fail2ban/jail.d/gamayun-nas.local ]; then
+  install -d /etc/fail2ban/jail.d
+  printf '# gamayun-nas: по умолчанию выключено, включается из веб-интерфейса\n[sshd]\nenabled = false\n' >/etc/fail2ban/jail.d/gamayun-nas.local
+  systemctl disable --now fail2ban >/dev/null 2>&1 || true
+fi
+# fail2ban выключен по умолчанию, а штатная ротация Debian (postrotate: fail2ban-client flushlogs) падает
+# при остановленной службе → logrotate.service failed. Свой файл через dpkg-divert: сброс журнала — только
+# если служба работает. Оригинал — /etc/fail2ban/logrotate.dpkg-orig; снимается в postrm.
+LR=/etc/logrotate.d/fail2ban
+if [ "$(dpkg-divert --truename $LR)" = $LR ]; then
+  dpkg-divert --package gamayun-nas --add --rename --divert /etc/fail2ban/logrotate.dpkg-orig $LR >/dev/null
+fi
+cat >$LR.tmp <<'LR'
+# gamayun-nas: ротация журнала fail2ban без ошибки при выключенной службе (оригинал — /etc/fail2ban/logrotate.dpkg-orig).
+/var/log/fail2ban.log {
+    weekly
+    rotate 4
+    compress
+    notifempty
+    delaycompress
+    missingok
+    postrotate
+        if systemctl -q is-active fail2ban; then fail2ban-client flushlogs >/dev/null; fi
+    endscript
+    create 640 root adm
+}
+LR
+if cmp -s $LR.tmp $LR; then rm -f $LR.tmp; else mv $LR.tmp $LR; fi
+# Samba: include общих папок и отключение штатного [homes].
+[ -f /etc/samba/gamayun-shares.conf ] || { : >/etc/samba/gamayun-shares.conf; chmod 644 /etc/samba/gamayun-shares.conf; }
+if ! grep -qE '^[[:space:]]*include[[:space:]]*=[[:space:]]*/etc/samba/gamayun-shares.conf' /etc/samba/smb.conf; then
+  cp -n /etc/samba/smb.conf /etc/samba/smb.conf.pre-gamayun
+  sed -i '0,/^\[global\]/s||[global]\n   include = /etc/samba/gamayun-shares.conf|' /etc/samba/smb.conf
+fi
+if grep -q '^\[homes\]' /etc/samba/smb.conf; then
+  cp -n /etc/samba/smb.conf /etc/samba/smb.conf.pre-gamayun-homes
+  awk '/^\[/ { h = ($0 == "[homes]") } { if (h) print ";" $0; else print }' /etc/samba/smb.conf >/etc/samba/smb.conf.new
+  mv /etc/samba/smb.conf.new /etc/samba/smb.conf
+fi
+testparm -s >/dev/null 2>&1 || echo "gamayun-nas: внимание — testparm: smb.conf некорректен" >&2
+systemctl daemon-reload
+systemctl enable gamayun-integrity.service gamayun-helper.service gamayund.service >/dev/null 2>&1
+systemctl enable --now smbd >/dev/null 2>&1 || true
+# gamayun-integrity — oneshot раннего этапа загрузки; при обновлении не перезапускается (тома уже открыты).
+systemctl restart gamayun-helper.service gamayund.service
+if [ -z "$2" ] && [ -e /var/lib/gamayun-nas/setup-token ]; then
+  echo "gamayun-nas: первый администратор — токен установки /var/lib/gamayun-nas/setup-token или"
+  echo "  sudo -u gamayun /usr/lib/gamayun-nas/gamayund admin create -config /etc/gamayun-nas/gamayund.json -name admin"
+fi
+exit 0

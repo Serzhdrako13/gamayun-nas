@@ -1,0 +1,36 @@
+/* Светлая тема — заготовка (раньше была светлой темой по умолчанию).
+   Только токены; включается data-theme="light". Полная светлая тема — позже. */
+:root[data-theme='light'] {
+  --wallpaper: linear-gradient(135deg, #dfe9f7, #f4e6f1 55%, #e3f3ee);
+  --bg: #e9eef6;
+  --glass: rgb(255 255 255 / 48%);
+  --solid: rgb(250 252 255 / 94%);
+  --surface: var(--glass);
+  --surface2: rgb(255 255 255 / 55%);
+  --field: rgb(255 255 255 / 60%);
+  --text: #14202e;
+  --muted: #475669;
+  --line: rgb(20 40 70 / 20%);
+  --track: rgb(20 32 46 / 14%);
+  --accent: #0b7a75;
+  --accent2: #2457c5;
+  --accent-text: #ffffff;
+  --ok: #17703f;
+  --warn: #8a4f00;
+  --bad: #b42318;
+  --info: #35536e;
+  --net-rx: #0a6fd6;
+  --net-tx: #d96a00;
+  --warn-bg: rgb(255 236 200 / 70%);
+  --bad-bg: rgb(253 224 220 / 72%);
+  --ok-bg: rgb(220 244 230 / 72%);
+  --scrim: rgb(20 30 45 / 40%);
+  --radius: 20px;
+  --shadow: 0 8px 32px rgb(40 60 90 / 14%);
+  --blur: blur(18px) saturate(1.4);
+  --on-bad: #ffffff;
+  --option-bg: #ffffff;
+  --text-shadow: none;
+  --knob: #ffffff;
+  --knob-shadow: 0 1px 3px rgb(0 0 0 / 35%);
+}

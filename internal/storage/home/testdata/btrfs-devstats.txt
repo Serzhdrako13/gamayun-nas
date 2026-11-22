@@ -1,0 +1,5 @@
+[/dev/mapper/dn_probe-data].write_io_errs    0
+[/dev/mapper/dn_probe-data].read_io_errs     0
+[/dev/mapper/dn_probe-data].flush_io_errs    0
+[/dev/mapper/dn_probe-data].corruption_errs  0
+[/dev/mapper/dn_probe-data].generation_errs  0

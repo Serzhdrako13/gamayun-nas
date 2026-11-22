@@ -1,0 +1,29 @@
+# gamayun-nas-apps: dockerd без docker.socket (сокет-активация ломает запуск после монтирования).
+# Не включается при загрузке: запускает только gamayund (через gamayun-helper) после монтирования пула.
+[Unit]
+# Только по команде gamayund: флаг ставит gamayun-helper apps.start; /run очищается при загрузке.
+ConditionPathExists=/run/gamayun-nas-apps/start
+Description=gamayun-nas apps: Docker
+After=network-online.target nftables.service gamayun-containerd.service
+Wants=network-online.target
+BindsTo=gamayun-containerd.service
+ConditionPathExists=/etc/gamayun-nas/apps/daemon.json
+# Предел перезапусков — в [Unit] (в [Service] systemd StartLimitIntervalSec не знает).
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+[Service]
+Type=notify
+Environment=PATH=/usr/lib/gamayun-nas-apps/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/lib/gamayun-nas-apps/bin/dockerd --config-file /etc/gamayun-nas/apps/daemon.json -H unix:///run/docker.sock --containerd=/run/containerd/containerd.sock
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutStartSec=0
+TimeoutStopSec=120
+RestartSec=2
+Restart=on-failure
+LimitNPROC=infinity
+LimitCORE=infinity
+TasksMax=infinity
+Delegate=yes
+KillMode=process
+OOMScoreAdjust=-500

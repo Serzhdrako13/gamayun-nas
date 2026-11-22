@@ -1,0 +1,41 @@
+// lib/format.js: sizes, pool types and statuses, write protection, disk roles.
+export default {
+  sync: {
+    etaHours: '~{h} h {m} min',
+    etaMinutes: '~{m} min',
+    stageIntegrity: 'computing checksums',
+    stageMirror: 'syncing disks',
+    left: ', {eta} left',
+    noEta: ', time estimate in about a minute',
+    text: '{pct}% ({stage}{eta})',
+  },
+  decimal: '.',
+  units: { b: 'B', kib: 'KiB', mib: 'MiB', gib: 'GiB', tib: 'TiB', pib: 'PiB' },
+  poolType: { basic: 'Basic (single disk)' },
+  failures: {
+    none: "won't survive a single disk failure",
+    single: 'survives 1 disk failure',
+    many: { one: 'survives {count} disk failure', other: 'survives {count} disk failures' },
+  },
+  health: {
+    ok: 'Healthy',
+    warning: 'Read-only (write error)',
+    resyncing: 'Syncing',
+    reshaping: 'Reshaping',
+    rebuilding: 'Rebuilding',
+    degraded: 'Degraded (disk dropped out)',
+    failed: 'Failed',
+    missing: 'Disks not found',
+    unknown: 'State unknown',
+    noData: 'No data',
+  },
+  protection: {
+    off: 'Pool protection is off: the pool will not switch to read-only when redundancy is exhausted',
+    offExhausted: 'Pool protection is off and redundancy is exhausted: the pool stays writable, one more disk failure will cause data loss',
+    override: 'Writing temporarily allowed manually until {time}',
+    emergencyRo: 'The pool file system switched to read-only after a write error',
+    readOnly: 'The pool is read-only: redundancy is exhausted',
+    exhausted: 'Redundancy is exhausted: one more disk failure will cause data loss',
+  },
+  disk: { free: 'Free', noId: 'No persistent ID', system: 'System', inUse: 'In use' },
+};

@@ -1,0 +1,32 @@
+/dev/md127:
+           Version : 1.2
+     Creation Time : Wed Nov  4 20:07:34 2026
+        Raid Level : raid5
+        Array Size : 2072832 (2024.25 MiB 2122.58 MB)
+     Used Dev Size : 1036416 (1012.13 MiB 1061.29 MB)
+      Raid Devices : 3
+     Total Devices : 3
+       Persistence : Superblock is persistent
+
+       Update Time : Wed Nov  4 20:14:46 2026
+             State : clean, degraded 
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 1
+     Spare Devices : 0
+
+            Layout : left-symmetric
+        Chunk Size : 64K
+
+Consistency Policy : resync
+
+              Name : nas-lab:int1-0  (local to host nas-lab)
+              UUID : b790f756:84f5a9c0:5f03c057:51ae5f39
+            Events : 64
+
+    Number   Major   Minor   RaidDevice State
+       0     253        0        0      active sync   /dev/dm-0
+       -       0        0        1      removed
+       2     253        3        2      active sync   /dev/dm-3
+
+       1     253        1        -      faulty   /dev/dm-1

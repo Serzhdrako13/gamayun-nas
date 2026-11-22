@@ -1,0 +1,65 @@
+/* Оболочка. Только токены темы. */
+.sh-widgets { width: 280px; flex: none; display: flex; flex-direction: column; gap: 10px; }
+/* Плашки не сжимаются: при нехватке высоты колонка прокручивается, а не накладывает плашки друг на друга. */
+.sh-widgets > * { flex: none; }
+.sh-clock { font-size: 2.1rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sh-rings { display: flex; gap: 16px; margin-bottom: 6px; }
+.sh-pool { display: flex; justify-content: space-between; align-items: center; margin: 2px 0 6px; }
+.sh-net { display: flex; gap: 14px; flex-wrap: wrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+.sh-net i { font-style: normal; font-weight: 800; font-size: 1.15em; }
+.sh-net .rx i { color: var(--net-rx); } .sh-net .tx i { color: var(--net-tx); }
+.sh-net-sel { min-height: 26px; padding: 0 4px; font-size: .8rem; max-width: 130px; }
+.sh-net-g { display: block; width: 100%; height: 36px; margin: 6px 0 2px; }
+.sh-net-g polyline { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.sh-net-g .rx { stroke: var(--net-rx); } .sh-net-g .tx { stroke: var(--net-tx); }
+.sh-ev { display: flex; gap: 8px; align-items: baseline; width: 100%; min-height: 0; padding: 4px 6px; margin: 0 -6px; border: 0; background: none; color: var(--text); text-align: left; font-size: .9rem; border-radius: 6px; cursor: pointer; }
+.sh-ev:hover, .sh-ev:focus-visible { background: var(--surface2); }
+.sh-ev i { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--ok); }
+.sh-ev i.warn { background: var(--warn); }
+@media (max-width: 900px) { .sh-widgets { width: 220px; } }
+@media (max-width: 640px) { .sh-widgets { width: auto; flex-direction: row; overflow-x: auto; } .sh-widgets > * { min-width: 200px; } }
+
+/* стиль «Вкладки» */
+.sh { display: flex; flex-direction: column; height: 100vh; padding: 10px; gap: 10px; }
+/* Панель всегда над окнами и панелями подробностей — её кнопки доступны. */
+.sh-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-width: 0; flex: none; position: relative; z-index: 100001; }
+.sh-brand { font-weight: 700; padding: 0 8px; white-space: nowrap; }
+.sh-bar .ui-tabs { flex: 0 1 auto; }
+.sh-lay { display: flex; gap: 10px; flex: 1; min-height: 0; }
+.sh-lay > .sh-widgets { overflow-y: auto; }
+.sh-work { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+.sh-work > .ui-win { flex: 1; }
+.sh-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.sh-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 140px; padding: 18px 8px; color: var(--text); cursor: pointer; }
+.sh-tile:hover:not(:disabled) { background: var(--surface2); }
+.sh-tile .ui-ico { width: 56px; height: 56px; border-radius: 14px; }
+.sh-tile b { font-weight: 500; }
+.sh-tile small { color: var(--muted); font-size: .75rem; margin-top: -6px; }
+.sh-tile:disabled { opacity: .45; cursor: default; }
+.sh-top { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.sh-top button { min-height: 32px; padding: 0 10px; font-size: .85rem; }
+@media (max-width: 640px) {
+  .sh { height: auto; min-height: 100vh; }
+  .sh-lay { flex-direction: column; }
+  .sh-brand, .sh-top .hide-mobile { display: none; }
+}
+
+/* стиль «Рабочий стол» */
+.sh-menu { min-height: 34px; padding: 0 12px; background: var(--surface2); }
+.sh-desk { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+.sh-icons { display: grid; grid-template-columns: repeat(auto-fill, 96px); grid-auto-rows: 104px; gap: 6px; }
+.sh-sc { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; min-height: 0; border: 1px solid transparent; background: none; color: var(--text); border-radius: var(--radius); }
+.sh-sc:hover, .sh-sc:focus-visible { background: var(--surface2); border-color: var(--line); }
+.sh-sc b { font-size: .8rem; font-weight: 500; }
+.sh-fw { position: absolute; min-width: 320px; min-height: 240px; }
+.sh-fw.max { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; }
+.sh-fw > .ui-win { height: 100%; }
+.sh-fw .ui-win-h { cursor: move; user-select: none; touch-action: none; }
+.sh-fw.max .ui-win-h { cursor: default; }
+.sh-popmenu { position: absolute; left: 0; top: 0; z-index: 100000; width: min(560px, 100%); padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; background: var(--solid); }
+.sh-popmenu .sh-tile { min-height: 110px; background: var(--surface2); border: 1px solid var(--line); border-radius: var(--radius); }
+@media (max-width: 640px) {
+  .sh-desk { overflow: visible; min-height: 70vh; }
+  .sh-fw { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; }
+}
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }

@@ -1,0 +1,28 @@
+// routes/Home.svelte: home — status, pools, disks, tasks.
+export default {
+  taskState: { queued: 'queued', running: 'running', succeeded: 'done', failed: 'error', interrupted: 'interrupted' },
+  poolPrefix: 'Pool {name}:',
+  details: 'Details',
+  allowWrite: 'Allow writing…',
+  noConnection: 'No connection to the server',
+  allGood: 'All good',
+  poolsNoIssues: 'Pools: {n}, no issues',
+  noPoolsYet: 'No pools yet',
+  issues: 'Issues: {n}',
+  issuesHint: 'See the messages above for details',
+  pools: 'Pools',
+  noPools: 'No pools.',
+  disks: 'Disks',
+  allDisks: 'All disks',
+  freeDisks: 'disks, free for a pool: ',
+  smart: {
+    critical: 'failing: {n}',
+    warning: 'warning: {n}',
+    ok: 'normal: {n}',
+    unknown: 'no data: {n}',
+    maxTemp: '· max {n} °C',
+  },
+  incomplete: 'The disk list is incomplete — disks are not offered for pools yet.',
+  tasks: 'Tasks',
+  noTasks: 'No active tasks.',
+};

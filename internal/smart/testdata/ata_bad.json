@@ -1,0 +1,5 @@
+{"smartctl":{"version":[7,4],"exit_status":8,"messages":[{"string":"SMART overall-health self-assessment test result: FAILED!","severity":"error"}]},"device":{"name":"/dev/sdc","type":"sat","protocol":"ATA"},"model_name":"ST2000DM008","serial_number":"ZFL0ABCD","smart_support":{"available":true,"enabled":true},"smart_status":{"passed":false},
+"ata_smart_data":{"self_test":{"status":{"value":249,"string":"in progress, 90% remaining","remaining_percent":90}}},
+"ata_smart_attributes":{"table":[{"id":5,"raw":{"value":120}},{"id":197,"raw":{"value":8}},{"id":198,"raw":{"value":8}}]},
+"power_on_time":{"hours":41000},"temperature":{"current":41},
+"ata_smart_self_test_log":{"standard":{"table":[{"type":{"value":2,"string":"Extended offline"},"status":{"value":121,"string":"Completed: read failure","remaining_percent":10,"passed":false},"lifetime_hours":40990}]}}}

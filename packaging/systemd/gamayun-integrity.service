@@ -1,0 +1,23 @@
+# gamayun-integrity — раннее открытие dm-integrity участников пулов.
+# Все участники появляются разом, до запуска gamayund: инкрементальная сборка md
+# (udev) собирает массив полностью, таймер mdadm-last-resort@ не успевает
+# запустить его неполным. Состав — /var/lib/gamayun-nas/boot-pools.json (пишет
+# gamayund). md, LVM и монтирование делает gamayund (home.pool.assemble).
+[Unit]
+Description=gamayun-nas: open dm-integrity members of pools
+DefaultDependencies=no
+After=systemd-udev-trigger.service systemd-remount-fs.service local-fs-pre.target
+Wants=systemd-udev-trigger.service
+RequiresMountsFor=/var/lib/gamayun-nas /usr/lib/gamayun-nas
+Before=gamayun-helper.service gamayund.service shutdown.target
+Conflicts=shutdown.target
+ConditionPathExists=/var/lib/gamayun-nas/boot-pools.json
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/gamayun-nas/gamayun-helper -open-integrity /var/lib/gamayun-nas/boot-pools.json -config /etc/gamayun-nas/gamayun-helper.json
+TimeoutStartSec=5min
+
+[Install]
+WantedBy=sysinit.target

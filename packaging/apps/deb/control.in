@@ -1,0 +1,15 @@
+Package: gamayun-nas-apps
+Version: @VERSION@
+Architecture: amd64
+Maintainer: Serzhdrako13 <serzhdrako13@gmail.com>
+Homepage: https://github.com/Serzhdrako13/gamayun-nas
+Section: admin
+Priority: optional
+Depends: gamayun-nas (= @VERSION@), iptables, nftables, kmod, avahi-daemon
+Conflicts: docker-ce, docker.io, containerd, containerd.io, runc
+Installed-Size: @SIZE@
+Description: GamayunNas — Docker applications (pinned versions)
+ Docker @DOCKER@, containerd, runc, tini, docker-proxy, Compose @COMPOSE@ and
+ Caddy @CADDY@ (application reverse proxy), unmodified upstream static builds.
+ The services are started by gamayund after the applications pool is mounted;
+ application data stays on the pool when the package is removed.

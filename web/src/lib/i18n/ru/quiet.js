@@ -1,0 +1,28 @@
+// Тишина уведомлений: lib/quiet.js, lib/QuietCard.svelte.
+export default {
+  preset: { '1h': '1 час', '4h': '4 часа', tomorrow: 'до завтра, 09:00', custom: 'свой срок' },
+  text: {
+    off: 'Уведомления отправляются как обычно.',
+    until: 'Тишина до {until}: {reason}.',
+    criticalMuted: ' Критичные тоже не отправляются.',
+    criticalSent: ' Критичные отправляются.',
+    suppressed: ' Не отправлено: {count}',
+    suppressedCritical: ', из них критичных: {count}',
+  },
+  title: 'Тишина на время работ',
+  on: 'включена',
+  ending: 'Тишина завершается…',
+  customLabel: 'До (местное время, не дольше 7 суток)',
+  reason: 'Причина',
+  reasonPlaceholder: 'замена диска в пуле data',
+  muteCritical: 'не отправлять и критичные',
+  muteCriticalWarn: 'Критичные события (отказ диска, выбытие диска из массива) тоже не уйдут на почту и webhook до конца тишины. Включайте, только если за сервером наблюдают на месте.',
+  change: 'Изменить срок',
+  start: 'Включить тишину',
+  stop: 'Отменить тишину',
+  untilShort: 'до {time}',
+  errTerm: 'Срок тишины: в будущем и не дольше 7 суток',
+  errReason: 'Укажите причину',
+  startedFlash: 'Тишина до {time}',
+  stoppedFlash: 'Тишина отменена',
+};
